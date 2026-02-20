@@ -3,6 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const authRoutes = require('./routes/auth');
+const voiceRoutes = require('./routes/voice');
 
 const app = express();
 
@@ -16,9 +17,11 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/voice', voiceRoutes);
 
 // Database Connection (Standard MERN pattern)
 const connectDB = async () => {
