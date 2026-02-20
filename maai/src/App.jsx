@@ -29,9 +29,14 @@ const Navbar = ({ onAuthClick, user, onLogout, onContactClick, contactLoading })
   return (
     <nav className="glass-nav">
       <div className="container py-4 flex justify-between items-center" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <ScrollLink
+          to="home"
+          smooth={true}
+          duration={500}
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+        >
           <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary)', fontFamily: 'Outfit' }}>Janani</span>
-        </div>
+        </ScrollLink>
         <div style={{ display: 'flex', gap: '2rem' }}>
           {['Home', 'Demo', 'Mission'].map((item) => (
             <ScrollLink
@@ -341,16 +346,47 @@ const FeatureCard = ({ icon: Icon, title, desc, delay }) => (
 
 const VoiceInterface = () => {
   const [isRecording, setIsRecording] = useState(false);
+  const [showTextInput, setShowTextInput] = useState(false);
+  const [textInput, setTextInput] = useState('');
   const [transcript, setTranscript] = useState('');
+  const holdTimerRef = React.useRef(null);
+  const isHoldingRef = React.useRef(false);
 
-  const toggleRecording = () => {
-    setIsRecording(!isRecording);
-    if (!isRecording) {
-      setTranscript('Listening to your query...');
-      setTimeout(() => setTranscript('Aapke shishu ki halchal aaj kaisi hai?'), 2000);
-    } else {
-      setTranscript('Processing your voice input...');
-      setTimeout(() => setTranscript('Recording saved successfully. Our AI is analyzing your response.'), 1500);
+  const startRecording = () => {
+    setIsRecording(true);
+    setTranscript('Audio Mode: Listening...');
+  };
+
+  const stopRecording = () => {
+    setIsRecording(false);
+    setTranscript('Audio Processed Successfully.');
+  };
+
+  const handlePointerDown = (e) => {
+    e.preventDefault();
+    isHoldingRef.current = false;
+    holdTimerRef.current = setTimeout(() => {
+      isHoldingRef.current = true;
+      startRecording();
+    }, 400); // 400ms threshold for hold
+  };
+
+  const handlePointerUp = (e) => {
+    e.preventDefault();
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      if (isHoldingRef.current) {
+        stopRecording();
+      } else {
+        // Quick click -> Toggle Text Option
+        setShowTextInput(!showTextInput);
+        if (!showTextInput) {
+          setTranscript('Text Mode: Typing enabled.');
+        } else {
+          setTranscript('');
+        }
+      }
+      holdTimerRef.current = null;
     }
   };
 
@@ -381,9 +417,9 @@ const VoiceInterface = () => {
           {isRecording && (
             <Motion.div
               initial={{ scale: 1, opacity: 0.5 }}
-              animate={{ scale: 1.8, opacity: 0 }}
+              animate={{ scale: 2, opacity: 0 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 1.5, repeat: Infinity }}
+              transition={{ duration: 1, repeat: Infinity }}
               style={{
                 position: 'absolute',
                 top: 0, left: 0, right: 0, bottom: 0,
@@ -397,11 +433,19 @@ const VoiceInterface = () => {
 
         <Motion.button
           layoutId="shared-mic"
-          onClick={toggleRecording}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={() => {
+            if (isHoldingRef.current) stopRecording();
+            if (holdTimerRef.current) {
+              clearTimeout(holdTimerRef.current);
+              holdTimerRef.current = null;
+            }
+          }}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
           style={{
-            width: '80px',
-            height: '80px',
+            width: '85px',
+            height: '85px',
             borderRadius: '50%',
             background: isRecording ? 'var(--primary-light)' : 'var(--primary)',
             border: 'none',
@@ -412,12 +456,60 @@ const VoiceInterface = () => {
             cursor: 'pointer',
             position: 'relative',
             zIndex: 10,
-            boxShadow: '0 10px 20px rgba(176, 24, 84, 0.3)'
+            boxShadow: '0 10px 25px rgba(176, 24, 84, 0.4)',
+            touchAction: 'none'
           }}
         >
-          {isRecording ? <Volume2 size={32} /> : <Mic size={32} />}
+          {isRecording ? <Volume2 size={35} /> : <Mic size={35} />}
         </Motion.button>
       </div>
+
+      <AnimatePresence>
+        {showTextInput && (
+          <Motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            style={{ marginTop: '2.5rem', overflow: 'hidden' }}
+          >
+            <div style={{ position: 'relative', maxWidth: '500px', margin: '0 auto' }}>
+              <input
+                type="text"
+                placeholder="Type your health concern here..."
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '1.2rem 1.5rem',
+                  borderRadius: '50px',
+                  border: '2px solid var(--accent)',
+                  fontSize: '1rem',
+                  outline: 'none',
+                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+                }}
+              />
+              <button style={{
+                position: 'absolute',
+                right: '8px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'var(--primary)',
+                color: 'white',
+                border: 'none',
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                cursor: 'pointer',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}>
+                <ArrowRight size={20} />
+              </button>
+            </div>
+          </Motion.div>
+        )}
+      </AnimatePresence>
 
       <div style={{ marginTop: '2rem', minHeight: '60px' }}>
         {transcript && (
@@ -437,7 +529,7 @@ const VoiceInterface = () => {
             "{transcript}"
           </Motion.p>
         )}
-        {!transcript && isRecording && <p style={{ color: 'var(--text-light)' }}>Listening...</p>}
+        {!transcript && isRecording && <p style={{ color: 'var(--text-light)', fontWeight: 'bold' }}>Hold to Record...</p>}
       </div>
     </Motion.div>
   );
@@ -511,6 +603,93 @@ const MainContent = ({ assistantRef }) => {
     </section>
   );
 };
+
+const ContactModal = ({ onClose, onProceed, loading }) => (
+  <Motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    style={{
+      position: 'fixed',
+      top: 0, left: 0, right: 0, bottom: 0,
+      background: 'rgba(0,0,0,0.6)',
+      backdropFilter: 'blur(8px)',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 2000,
+      padding: '20px'
+    }}
+    onClick={onClose}
+  >
+    <Motion.div
+      initial={{ scale: 0.9, y: 20 }}
+      animate={{ scale: 1, y: 0 }}
+      exit={{ scale: 0.9, y: 20 }}
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        background: 'white',
+        padding: '3rem',
+        borderRadius: '32px',
+        maxWidth: '500px',
+        width: '100%',
+        textAlign: 'center',
+        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+      }}
+    >
+      <div style={{
+        width: '80px',
+        height: '80px',
+        background: '#fce4ec',
+        borderRadius: '50%',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        margin: '0 auto 2rem'
+      }}>
+        <Users color="var(--primary)" size={40} />
+      </div>
+      <h2 style={{ marginBottom: '1rem', color: 'var(--text-dark)' }}>Support Connection</h2>
+      <p style={{ color: 'var(--text-light)', marginBottom: '2.5rem', lineHeight: '1.6' }}>
+        Would you like to initiate a secure voice call with our medical support team?
+        The call will be connected to your registered number shortly.
+      </p>
+      <div style={{ display: 'flex', gap: '1rem' }}>
+        <button
+          onClick={onClose}
+          style={{
+            flex: 1,
+            padding: '1rem',
+            borderRadius: '50px',
+            border: '2px solid #eee',
+            background: 'white',
+            fontWeight: '600',
+            cursor: 'pointer'
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onProceed}
+          disabled={loading}
+          style={{
+            flex: 2,
+            padding: '1rem',
+            borderRadius: '50px',
+            border: 'none',
+            background: 'var(--primary)',
+            color: 'white',
+            fontWeight: '600',
+            cursor: 'pointer',
+            opacity: loading ? 0.7 : 1
+          }}
+        >
+          {loading ? 'Initiating...' : 'Yes, Connect Me'}
+        </button>
+      </div>
+    </Motion.div>
+  </Motion.div>
+);
 
 const Footer = () => (
   <footer style={{ background: 'var(--primary)', color: 'white', padding: '4rem 0' }}>
@@ -595,6 +774,7 @@ const ChatbotButton = ({ isVisible }) => {
 
 function App() {
   const [showAuth, setShowAuth] = useState(false);
+  const [showContact, setShowContact] = useState(false);
   const [contactLoading, setContactLoading] = useState(false);
   const assistantRef = React.useRef(null);
   const [assistantVisible, setAssistantVisible] = useState(false);
@@ -617,7 +797,7 @@ function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleContact = async () => {
+  const handleTriggerCall = async () => {
     setContactLoading(true);
     try {
       const response = await fetch('http://localhost:5000/api/voice/trigger', {
@@ -626,10 +806,11 @@ function App() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Failed to trigger call');
+      setShowContact(false); // Close modal on success
       alert('Call initiated! You will receive a call shortly.');
     } catch (err) {
       console.error('Error triggering call:', err);
-      alert('Could not initiate call. Please check if the backend is running and ngrok is configured.');
+      alert('Could not initiate call. Please check if the backend is running.');
     } finally {
       setContactLoading(false);
     }
@@ -652,7 +833,7 @@ function App() {
         onAuthClick={() => setShowAuth(true)}
         user={user}
         onLogout={handleLogout}
-        onContactClick={handleContact}
+        onContactClick={() => setShowContact(true)}
         contactLoading={contactLoading}
       />
       <Hero onAuthClick={() => setShowAuth(true)} user={user} />
@@ -665,6 +846,13 @@ function App() {
           <Auth
             onClose={() => setShowAuth(false)}
             onAuthSuccess={(userData) => setUser(userData)}
+          />
+        )}
+        {showContact && (
+          <ContactModal
+            onClose={() => setShowContact(false)}
+            onProceed={handleTriggerCall}
+            loading={contactLoading}
           />
         )}
       </AnimatePresence>
