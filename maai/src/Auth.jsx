@@ -116,7 +116,7 @@ const Auth = ({ onClose, onAuthSuccess }) => {
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
                         <Heart color="var(--primary)" size={32} fill="var(--primary)" />
-                        <span style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--primary)', fontFamily: 'Outfit' }}>Maa-Sathi</span>
+                        <span style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--primary)', fontFamily: 'Outfit' }}>Janani</span>
                     </div>
                     <h2 style={{ fontSize: '1.5rem', color: 'var(--text-dark)' }}>
                         {isLogin ? 'Welcome Back' : 'Create Account'}

@@ -29,7 +29,7 @@ const Navbar = ({ onAuthClick, user, onLogout, onContactClick, contactLoading })
       <div className="container py-4 flex justify-between items-center" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Heart color="var(--secondary)" size={24} fill="var(--secondary)" />
-          <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary)', fontFamily: 'Outfit' }}>Maa-Sathi</span>
+          <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary)', fontFamily: 'Outfit' }}>Janani</span>
         </div>
         <div style={{ display: 'flex', gap: '2rem' }}>
           {['Home', 'Demo', 'Mission'].map((item) => (
@@ -106,7 +106,7 @@ const Hero = ({ onAuthClick, user }) => {
               animate={{ scale: 1 }}
               transition={{ duration: 0.5 }}
             >
-              Maa-Sathi
+              Janani
             </Motion.h1>
             <h2 style={{ fontSize: '2.2rem', color: 'var(--text-dark)', marginBottom: '2rem', fontWeight: '600', lineHeight: '1.3' }}>
               AI-Powered Multilingual Voice Assistant for <span style={{ color: 'var(--primary)' }}>Rural Maternal Care</span>
@@ -365,7 +365,7 @@ const Footer = () => (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
             <Heart color="white" size={24} fill="white" />
-            <span style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Maa-Sathi</span>
+            <span style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Janani</span>
           </div>
           <p style={{ opacity: 0.8, fontSize: '0.9rem' }}>
             Empowering Rural Women with RAG-Based Medical Intelligence
