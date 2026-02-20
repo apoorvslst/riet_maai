@@ -13,9 +13,11 @@ import {
   Activity,
   MessageCircle,
   Stethoscope,
-
   LogOut,
-  User as UserIcon
+  User as UserIcon,
+  MessageSquare,
+  Volume2,
+  Bot
 } from 'lucide-react';
 import Auth from './Auth';
 
@@ -28,7 +30,6 @@ const Navbar = ({ onAuthClick, user, onLogout, onContactClick, contactLoading })
     <nav className="glass-nav">
       <div className="container py-4 flex justify-between items-center" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Heart color="var(--secondary)" size={24} fill="var(--secondary)" />
           <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary)', fontFamily: 'Outfit' }}>Janani</span>
         </div>
         <div style={{ display: 'flex', gap: '2rem' }}>
@@ -82,9 +83,51 @@ const Navbar = ({ onAuthClick, user, onLogout, onContactClick, contactLoading })
 
 
 const Hero = ({ onAuthClick, user }) => {
+  const [petals, setPetals] = useState([]);
+
+  const spawnPetals = (x, y) => {
+    const newPetals = Array.from({ length: 12 }).map(() => ({
+      id: Math.random(),
+      x,
+      y,
+      size: Math.random() * 15 + 10,
+      rotation: Math.random() * 360,
+      drift: (Math.random() - 0.5) * 200,
+      duration: Math.random() * 2 + 2,
+    }));
+    setPetals((prev) => [...prev, ...newPetals]);
+  };
+
   return (
-    <Element name="home">
-      <section className="container" style={{ paddingTop: '150px' }}>
+    <Element name="home" onClick={(e) => spawnPetals(e.clientX, e.clientY)}>
+      <div style={{ position: 'fixed', top: 0, left: 0, pointerEvents: 'none', zIndex: 9999 }}>
+        <AnimatePresence>
+          {petals.map((petal) => (
+            <Motion.div
+              key={petal.id}
+              initial={{ opacity: 0.8, scale: 0, x: petal.x, y: petal.y, rotate: petal.rotation }}
+              animate={{
+                opacity: 0,
+                scale: [0.5, 1, 0.8],
+                y: petal.y + 400 + Math.random() * 200,
+                x: petal.x + petal.drift,
+                rotate: petal.rotation + (Math.random() > 0.5 ? 180 : -180)
+              }}
+              transition={{ duration: petal.duration, ease: "easeOut" }}
+              onAnimationComplete={() => setPetals((prev) => prev.filter((p) => p.id !== petal.id))}
+              style={{
+                position: 'absolute',
+                width: petal.size,
+                height: petal.size * 0.7,
+                background: 'linear-gradient(135deg, #ff69b4, #fce4ec)',
+                borderRadius: '50% 0 50% 50%',
+                boxShadow: '0 2px 5px rgba(255, 105, 180, 0.2)',
+              }}
+            />
+          ))}
+        </AnimatePresence>
+      </div>
+      <section className="container" style={{ paddingTop: '100px', cursor: 'pointer' }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -162,24 +205,23 @@ const Hero = ({ onAuthClick, user }) => {
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              width: '85%',
-              height: '85%',
+              width: '115%',
+              height: '115%',
               background: 'var(--accent)',
               borderRadius: '50%',
               filter: 'blur(60px)',
               zIndex: -1,
-              opacity: 0.5
+              opacity: 0.6
             }}></div>
             <img
               src={HERO_IMAGE}
               alt="Maternal Health"
               style={{
                 width: '100%',
-                maxWidth: '550px',
-                height: 'auto',
-                borderRadius: '40px',
-                boxShadow: 'var(--shadow-lg)',
-                border: '8px solid white'
+                maxWidth: '450px',
+                height: '450px',
+                objectFit: 'cover',
+                borderRadius: '50%',
               }}
               onError={(e) => {
                 e.target.src = 'https://images.unsplash.com/photo-1559832306-27a0278d99a7?auto=format&fit=crop&q=80&w=1000';
@@ -297,11 +339,122 @@ const FeatureCard = ({ icon: Icon, title, desc, delay }) => (
   </Motion.div>
 );
 
-const MainContent = () => {
+const VoiceInterface = () => {
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcript, setTranscript] = useState('');
+
+  const toggleRecording = () => {
+    setIsRecording(!isRecording);
+    if (!isRecording) {
+      setTranscript('Listening to your query...');
+      setTimeout(() => setTranscript('Aapke shishu ki halchal aaj kaisi hai?'), 2000);
+    } else {
+      setTranscript('Processing your voice input...');
+      setTimeout(() => setTranscript('Recording saved successfully. Our AI is analyzing your response.'), 1500);
+    }
+  };
+
   return (
-    <Element name="mission">
-      <section style={{ background: 'transparent' }}>
-        <div className="container">
+    <Motion.div
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      style={{
+        marginTop: '4rem',
+        padding: '3rem',
+        background: 'linear-gradient(135deg, #fff 0%, #fef7f9 100%)',
+        borderRadius: '30px',
+        boxShadow: 'var(--shadow-lg)',
+        border: '1px solid var(--accent)',
+        maxWidth: '800px',
+        margin: '4rem auto 0',
+        textAlign: 'center'
+      }}
+    >
+      <h3 style={{ marginBottom: '1.5rem', color: 'var(--primary)' }}>Voice-Based Health Assistant</h3>
+      <p style={{ color: 'var(--text-light)', marginBottom: '2rem' }}>
+        Speak in your local language (Hindi, Marathi, Tamil) to record your symptoms or ask a question.
+      </p>
+
+      <div style={{ position: 'relative', display: 'inline-block' }}>
+        <AnimatePresence>
+          {isRecording && (
+            <Motion.div
+              initial={{ scale: 1, opacity: 0.5 }}
+              animate={{ scale: 1.8, opacity: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+              style={{
+                position: 'absolute',
+                top: 0, left: 0, right: 0, bottom: 0,
+                background: 'var(--primary)',
+                borderRadius: '50%',
+                zIndex: 0
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        <Motion.button
+          layoutId="shared-mic"
+          onClick={toggleRecording}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          style={{
+            width: '80px',
+            height: '80px',
+            borderRadius: '50%',
+            background: isRecording ? 'var(--primary-light)' : 'var(--primary)',
+            border: 'none',
+            color: 'white',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            cursor: 'pointer',
+            position: 'relative',
+            zIndex: 10,
+            boxShadow: '0 10px 20px rgba(176, 24, 84, 0.3)'
+          }}
+        >
+          {isRecording ? <Volume2 size={32} /> : <Mic size={32} />}
+        </Motion.button>
+      </div>
+
+      <div style={{ marginTop: '2rem', minHeight: '60px' }}>
+        {transcript && (
+          <Motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            style={{
+              fontStyle: 'italic',
+              color: 'var(--primary)',
+              fontWeight: '500',
+              padding: '1rem',
+              background: 'white',
+              borderRadius: '12px',
+              borderLeft: '4px solid var(--primary)'
+            }}
+          >
+            "{transcript}"
+          </Motion.p>
+        )}
+        {!transcript && isRecording && <p style={{ color: 'var(--text-light)' }}>Listening...</p>}
+      </div>
+    </Motion.div>
+  );
+};
+
+const MainContent = ({ assistantRef }) => {
+  return (
+    <section style={{ background: 'transparent', minHeight: 'auto', paddingBottom: '150px' }}>
+      <div className="container">
+        {/* Voice Input Interface Relocated to Top */}
+        <Element name="voice-assistant">
+          <div ref={assistantRef}>
+            <VoiceInterface />
+          </div>
+        </Element>
+
+        <Element name="mission" style={{ marginTop: '5rem', paddingTop: '5rem' }}>
           <div style={{ textAlign: 'center', marginBottom: '5rem' }}>
             <h2 style={{ fontSize: '3rem', marginBottom: '1rem' }}>The Knowledge Foundation</h2>
             <p style={{ maxWidth: '800px', margin: '0 auto', color: 'var(--text-light)' }}>
@@ -352,9 +505,10 @@ const MainContent = () => {
               delay={0.6}
             />
           </div>
-        </div>
-      </section>
-    </Element>
+
+        </Element>
+      </div>
+    </section>
   );
 };
 
@@ -395,14 +549,73 @@ const Footer = () => (
   </footer>
 );
 
+
+const ChatbotButton = ({ isVisible }) => {
+  return (
+    <AnimatePresence>
+      {isVisible && (
+        <ScrollLink
+          to="voice-assistant"
+          smooth={true}
+          duration={800}
+          offset={-70}
+          style={{
+            position: 'fixed',
+            bottom: '2rem',
+            right: '2rem',
+            zIndex: 1000,
+            cursor: 'pointer'
+          }}
+        >
+          <Motion.div
+            layoutId="shared-mic"
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            whileHover={{ scale: 1.1, rotate: 10 }}
+            whileTap={{ scale: 0.9 }}
+            style={{
+              width: '65px',
+              height: '65px',
+              borderRadius: '50%',
+              background: 'var(--primary)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              boxShadow: '0 10px 30px rgba(176, 24, 84, 0.4)',
+              color: 'white'
+            }}
+          >
+            <Bot size={35} color="white" />
+          </Motion.div>
+        </ScrollLink>
+      )}
+    </AnimatePresence>
+  );
+};
+
+
 function App() {
   const [showAuth, setShowAuth] = useState(false);
   const [contactLoading, setContactLoading] = useState(false);
+  const assistantRef = React.useRef(null);
+  const [assistantVisible, setAssistantVisible] = useState(false);
 
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem('user');
     return savedUser ? JSON.parse(savedUser) : null;
   });
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (assistantRef.current) {
+        const rect = assistantRef.current.getBoundingClientRect();
+        // Hide chatbot when Assistant is entering the middle of the screen
+        setAssistantVisible(rect.top < window.innerHeight * 0.6);
+      }
+    };
+    handleScroll();
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleContact = async () => {
     setContactLoading(true);
@@ -434,6 +647,7 @@ function App() {
 
   return (
     <div className="App">
+      <ChatbotButton isVisible={!assistantVisible} />
       <Navbar
         onAuthClick={() => setShowAuth(true)}
         user={user}
@@ -443,7 +657,7 @@ function App() {
       />
       <Hero onAuthClick={() => setShowAuth(true)} user={user} />
       <DemoSection />
-      <MainContent />
+      <MainContent assistantRef={assistantRef} />
       <Footer />
 
       <AnimatePresence>
