@@ -1,0 +1,8 @@
+node_modules/
+backend/node_modules/
+maai/node_modules/
+.env
+.ds_store
+dist/
+build/
+.vscode/
