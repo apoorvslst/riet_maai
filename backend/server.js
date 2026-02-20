@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const authRoutes = require('./routes/auth');
 const voiceRoutes = require('./routes/voice');
+const inboundRoutes = require('./routes/inbound');
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.use(express.urlencoded({ extended: false }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/voice', voiceRoutes);
+app.use('/api/inbound', inboundRoutes);
 
 // Database Connection (Standard MERN pattern)
 const connectDB = async () => {
