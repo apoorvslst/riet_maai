@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import { Link as ScrollLink, Element } from 'react-scroll';
 import {
   Mic,
@@ -23,7 +23,7 @@ import Auth from './Auth';
 // Hero Image Path from the user link
 const HERO_IMAGE = 'https://clipart-library.com/2024/pregnant-woman-cartoon/pregnant-woman-cartoon-1.jpg';
 
-const Navbar = ({ onAuthClick, user, onLogout }) => {
+const Navbar = ({ onAuthClick, user, onLogout, onContactClick, contactLoading }) => {
   return (
     <nav className="glass-nav">
       <div className="container py-4 flex justify-between items-center" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -47,6 +47,20 @@ const Navbar = ({ onAuthClick, user, onLogout }) => {
           ))}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button
+            onClick={onContactClick}
+            disabled={contactLoading}
+            className="btn-primary"
+            style={{
+              padding: '0.5rem 1.5rem',
+              background: 'transparent',
+              border: '2px solid var(--primary)',
+              color: 'var(--primary)',
+              opacity: contactLoading ? 0.7 : 1
+            }}
+          >
+            {contactLoading ? 'Calling...' : 'Contact Support'}
+          </button>
           {user ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)', fontWeight: '600' }}>
@@ -79,13 +93,13 @@ const Hero = ({ onAuthClick, user }) => {
           flexWrap: 'wrap'
         }}>
           {/* Left Content */}
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8 }}
             style={{ flex: '1', minWidth: '300px', textAlign: 'left' }}
           >
-            <motion.h1
+            <Motion.h1
               className="gradient-text"
               style={{ fontSize: '5.5rem', lineHeight: '1.1', marginBottom: '1.5rem', fontWeight: '800' }}
               initial={{ scale: 0.9 }}
@@ -93,7 +107,7 @@ const Hero = ({ onAuthClick, user }) => {
               transition={{ duration: 0.5 }}
             >
               Maa-Sathi
-            </motion.h1>
+            </Motion.h1>
             <h2 style={{ fontSize: '2.2rem', color: 'var(--text-dark)', marginBottom: '2rem', fontWeight: '600', lineHeight: '1.3' }}>
               AI-Powered Multilingual Voice Assistant for <span style={{ color: 'var(--primary)' }}>Rural Maternal Care</span>
             </h2>
@@ -133,11 +147,11 @@ const Hero = ({ onAuthClick, user }) => {
                 Learn More
               </button>
             </div>
-          </motion.div>
+          </Motion.div>
 
 
           {/* Right Image */}
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2, duration: 0.8 }}
@@ -171,7 +185,7 @@ const Hero = ({ onAuthClick, user }) => {
                 e.target.src = 'https://images.unsplash.com/photo-1559832306-27a0278d99a7?auto=format&fit=crop&q=80&w=1000';
               }}
             />
-          </motion.div>
+          </Motion.div>
         </div>
       </section>
     </Element>
@@ -183,7 +197,7 @@ const DemoSection = () => {
     <Element name="demo">
       <section style={{ background: '#fff' }}>
         <div className="container text-center" style={{ textAlign: 'center' }}>
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
@@ -218,7 +232,7 @@ const DemoSection = () => {
                 alignItems: 'center',
                 background: 'linear-gradient(45deg, rgba(0,0,0,0.7), rgba(0,0,0,0.3))'
               }}>
-                <motion.div
+                <Motion.div
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
                   style={{
@@ -234,7 +248,7 @@ const DemoSection = () => {
                   }}
                 >
                   <Play fill="black" size={32} style={{ marginLeft: '5px' }} />
-                </motion.div>
+                </Motion.div>
                 <div style={{ color: 'white', fontSize: '1.2rem', fontWeight: '500' }}>Demo Video: Voice-Based Tracking</div>
               </div>
               <img
@@ -243,7 +257,7 @@ const DemoSection = () => {
                 alt="Demo Preview"
               />
             </div>
-          </motion.div>
+          </Motion.div>
         </div>
       </section>
     </Element>
@@ -251,7 +265,7 @@ const DemoSection = () => {
 };
 
 const FeatureCard = ({ icon: Icon, title, desc, delay }) => (
-  <motion.div
+  <Motion.div
     initial={{ opacity: 0, y: 20 }}
     whileInView={{ opacity: 1, y: 0 }}
     viewport={{ once: true }}
@@ -280,7 +294,7 @@ const FeatureCard = ({ icon: Icon, title, desc, delay }) => (
     </div>
     <h3 style={{ marginBottom: '1rem', fontSize: '1.5rem' }}>{title}</h3>
     <p style={{ color: 'var(--text-light)', fontSize: '0.95rem' }}>{desc}</p>
-  </motion.div>
+  </Motion.div>
 );
 
 const MainContent = () => {
@@ -383,15 +397,33 @@ const Footer = () => (
 
 function App() {
   const [showAuth, setShowAuth] = useState(false);
+  const [contactLoading, setContactLoading] = useState(false);
 
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem('user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
 
-  const [user, setUser] = useState(null);
+  const handleContact = async () => {
+    setContactLoading(true);
+    try {
+      const response = await fetch('http://localhost:5000/api/voice/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Failed to trigger call');
+      alert('Call initiated! You will receive a call shortly.');
+    } catch (err) {
+      console.error('Error triggering call:', err);
+      alert('Could not initiate call. Please check if the backend is running and ngrok is configured.');
+    } finally {
+      setContactLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+    // Initial user state is now handled by useState initializer
   }, []);
 
   const handleLogout = () => {
@@ -402,7 +434,13 @@ function App() {
 
   return (
     <div className="App">
-      <Navbar onAuthClick={() => setShowAuth(true)} user={user} onLogout={handleLogout} />
+      <Navbar
+        onAuthClick={() => setShowAuth(true)}
+        user={user}
+        onLogout={handleLogout}
+        onContactClick={handleContact}
+        contactLoading={contactLoading}
+      />
       <Hero onAuthClick={() => setShowAuth(true)} user={user} />
       <DemoSection />
       <MainContent />

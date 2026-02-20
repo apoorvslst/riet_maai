@@ -1,7 +1,36 @@
 const express = require('express');
 const router = express.Router();
-const VoiceResponse = require('twilio').twiml.VoiceResponse;
+const twilio = require('twilio');
+const VoiceResponse = twilio.twiml.VoiceResponse;
 const HealthLog = require('../models/HealthLog');
+
+// Configuration
+const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER;
+const TARGET_PHONE = process.env.MY_PHONE_NUMBER;
+const WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL || 'https://photomechanically-unmustered-sharyn.ngrok-free.dev';
+
+// POST /api/voice/trigger
+// Initiates an outbound call
+router.post('/trigger', async (req, res) => {
+    try {
+        const client = twilio(ACCOUNT_SID, AUTH_TOKEN);
+        const call = await client.calls.create({
+            to: TARGET_PHONE,
+            from: TWILIO_PHONE,
+            url: `${WEBHOOK_BASE_URL}/api/voice/webhook`,
+            method: 'POST'
+        });
+
+        console.log(`📞 Call initiated via API! SID: ${call.sid}`);
+        res.json({ message: 'Call initiated successfully', callSid: call.sid });
+    } catch (error) {
+        console.error('❌ Failed to initiate call:', error.message);
+        res.status(500).json({ message: 'Failed to initiate call', error: error.message });
+    }
+});
+
 
 // POST /api/voice/webhook
 // Twilio calls this URL when the outbound call is answered.
