@@ -17,15 +17,23 @@ import {
   User as UserIcon,
   MessageSquare,
   Volume2,
-  Bot
+  Bot,
+  Calendar,
+  Award,
+  TrendingUp,
+  AlertTriangle,
+  ChevronRight,
+  Clock,
+  Utensils
 } from 'lucide-react';
 import Auth from './Auth';
+import Dashboard from './Dashboard';
 
 
 // Hero Image Path from the user link
 const HERO_IMAGE = 'https://clipart-library.com/2024/pregnant-woman-cartoon/pregnant-woman-cartoon-1.jpg';
 
-const Navbar = ({ onAuthClick, user, onLogout, onContactClick, contactLoading }) => {
+const Navbar = ({ onAuthClick, user, onLogout, onContactClick, contactLoading, setView, currentView }) => {
   return (
     <nav className="glass-nav">
       <div className="container py-4 flex justify-between items-center" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -45,12 +53,36 @@ const Navbar = ({ onAuthClick, user, onLogout, onContactClick, contactLoading })
               smooth={true}
               duration={500}
               offset={-70}
-              style={{ cursor: 'pointer', fontWeight: '500', color: 'var(--text-dark)', transition: 'color 0.3s' }}
+              onClick={() => setView('landing')}
+              style={{
+                cursor: 'pointer',
+                fontWeight: '500',
+                color: currentView === 'landing' ? 'var(--text-dark)' : '#64748b',
+                transition: 'color 0.3s'
+              }}
               className="hover-text-primary"
             >
               {item}
             </ScrollLink>
           ))}
+          {user && (
+            <button
+              onClick={() => setView('dashboard')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: '500',
+                color: currentView === 'dashboard' ? 'var(--primary)' : '#64748b',
+                fontFamily: 'inherit',
+                fontSize: 'inherit',
+                transition: 'color 0.3s'
+              }}
+              className="hover-text-primary"
+            >
+              Dashboard
+            </button>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <button
@@ -87,7 +119,7 @@ const Navbar = ({ onAuthClick, user, onLogout, onContactClick, contactLoading })
 };
 
 
-const Hero = ({ onAuthClick, user }) => {
+const Hero = ({ onAuthClick, user, setView }) => {
   const [petals, setPetals] = useState([]);
 
   const spawnPetals = (x, y) => {
@@ -177,6 +209,7 @@ const Hero = ({ onAuthClick, user }) => {
               )}
               {user && (
                 <button
+                  onClick={() => setView('dashboard')}
                   className="btn-primary"
                   style={{ padding: '1rem 2.5rem', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                 >
@@ -691,8 +724,8 @@ const ContactModal = ({ onClose, onProceed, loading }) => (
   </Motion.div>
 );
 
-const Footer = () => (
-  <footer style={{ background: 'var(--primary)', color: 'white', padding: '4rem 0' }}>
+const Footer = ({ user }) => (
+  <footer style={{ background: '#0f172a', color: 'white', padding: '4rem 0' }}>
     <div className="container">
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '3rem', marginBottom: '3rem' }}>
         <div>
@@ -707,8 +740,9 @@ const Footer = () => (
         <div>
           <h4 style={{ color: 'white', marginBottom: '1.5rem' }}>Quick Links</h4>
           <ul style={{ listStyle: 'none', opacity: 0.8 }}>
-            <li style={{ marginBottom: '0.8rem' }}>About System</li>
+            <li style={{ marginBottom: '0.8rem', cursor: 'pointer' }} onClick={() => window.scrollToView('landing')}>About System</li>
             <li style={{ marginBottom: '0.8rem' }}>Research Base</li>
+            {user && <li style={{ marginBottom: '0.8rem', cursor: 'pointer' }} onClick={() => window.scrollToView('dashboard')}>User Dashboard</li>}
             <li style={{ marginBottom: '0.8rem' }}>Terms of Care</li>
           </ul>
         </div>
@@ -776,11 +810,20 @@ const ChatbotButton = ({ isVisible }) => {
 
 
 function App() {
+  const [view, setView] = useState('landing');
   const [showAuth, setShowAuth] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [contactLoading, setContactLoading] = useState(false);
   const assistantRef = React.useRef(null);
   const [assistantVisible, setAssistantVisible] = useState(false);
+
+  // Extend window object to allow navigation from components
+  useEffect(() => {
+    window.scrollToView = (v) => {
+      setView(v);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+  }, []);
 
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem('user');
@@ -838,11 +881,28 @@ function App() {
         onLogout={handleLogout}
         onContactClick={() => setShowContact(true)}
         contactLoading={contactLoading}
+        setView={setView}
+        currentView={view}
       />
-      <Hero onAuthClick={() => setShowAuth(true)} user={user} />
-      <DemoSection />
-      <MainContent assistantRef={assistantRef} />
-      <Footer />
+
+      <AnimatePresence mode="wait">
+        {view === 'landing' ? (
+          <Motion.div key="landing">
+            <Hero onAuthClick={() => setShowAuth(true)} user={user} setView={setView} />
+            <DemoSection />
+            <MainContent assistantRef={assistantRef} />
+          </Motion.div>
+        ) : (
+          <Dashboard
+            key="dashboard"
+            user={user}
+            onBack={() => setView('landing')}
+            onEmergencyCall={handleTriggerCall}
+          />
+        )}
+      </AnimatePresence>
+
+      <Footer user={user} />
 
       <AnimatePresence>
         {showAuth && (
