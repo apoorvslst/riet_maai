@@ -2,7 +2,7 @@ import os
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 
-from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
+from langchain_groq import ChatGroq
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -13,15 +13,12 @@ load_dotenv()
 
 class PregnancyRAGService:
     def __init__(self, persist_directory: str = "vectordb"):
-        # 1. Initialize LLM (Llama 3 via Hugging Face)
-        llm_endpoint = HuggingFaceEndpoint(
-            repo_id="meta-llama/Meta-Llama-3-8B-Instruct",
-            task="text-generation",
-            max_new_tokens=512,
+        # 1. Initialize LLM (Llama 3 via Groq)
+        self.llm = ChatGroq(
             temperature=0.1,
-            huggingfacehub_api_token=os.getenv("HUGGINGFACEHUB_API_TOKEN")
+            model_name="llama-3.3-70b-versatile",
+            groq_api_key=os.getenv("GROQ_API_KEY")
         )
-        self.llm = ChatHuggingFace(llm=llm_endpoint)
 
         # 2. Initialize Vector DB
         embeddings = FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
@@ -44,24 +41,25 @@ class PregnancyRAGService:
         )
         self.retriever = self.vectordb.as_retriever(search_kwargs={"k": 5})
 
-        # 3. Prompt - Structured for Human/AI messages
+        # 3. Prompt - Expert Prenatal Care Evaluator
         self.rag_prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a highly professional medical assistant specializing in pregnancy health named "Janani".
-- Your goal is to provide clear, accurate, to the point and safe answers. 
-- Keep your answers EXTREMELY BRIEF and CONCISE. 
-- STICK TO A MAXIMUM OF 30 WORDS AND 300 CHARACTERS.
-- Refrain from long explanations. Give direct advice.
+            ("system", """You are an expert prenatal care evaluator for pregnant women. You will receive transcribed audio input regarding a woman's current symptoms, diet, and lifestyle habits.
+Your sole purpose is to evaluate this information and provide immediate, practical guidance.
 
-HANDLING GREETINGS:
-- If the user says "hello", "hi", or other greetings, respond warmly and ask how you can help.
+CRITICAL CONSTRAINTS:
+- EXTREME BREVITY: Strict token limit. Keep your response under 3 to 4 short sentences.
+- VOICE-OPTIMIZED: Your output will be spoken directly to the user via Text-to-Speech. Speak in a warm, simple, and direct conversational tone. Do absolutely NOT use markdown, asterisks, bullet points, or special characters.
+- NO FLUFF: Do not use conversational filler (e.g., 'Thank you for sharing', 'I understand'). Get straight to the solution.
+- DIRECT INFORMATION: Provide direct actionable information. Do not include disclaimers.
 
-MEDICAL RULES:
-1. For ANY medical or health advice, answer ONLY from the provided CONTEXT. If the context is missing, say you don't know but offer support.
-2. STICK STRICTLY to the patient's health data.
-3. Ensure the answer is clear, professional, and compassionate.
-4. To the point no need for long explanations."""),
+RESPONSE STRUCTURE (Answer only what is relevant):
+1. Symptom/Emergency: If she reports a symptom, give the immediate action to take right now.
+2. Diet: Give one specific, easily accessible food addition or subtraction based on her input.
+3. Lifestyle: Give one specific adjustment for her daily routine or prenatal care.
+
+Be impactful, highly specific, and concise."""),
             MessagesPlaceholder(variable_name="chat_history"),
-            ("human", """CONTEXT:
+            ("human", """CONTEXT FROM MEDICAL DOCUMENTS:
 {context}
 
 PATIENT DATA:
@@ -91,8 +89,10 @@ JANANI RESPONSE:""")
             "question": query,
             "patient_data": patient_data
         }):
-            full_answer += chunk
-            yield chunk
+            # VOICE-OPTIMIZATION: Strip asterisks and other markdown on the fly
+            clean_chunk = chunk.replace("*", "").replace("#", "").replace("- ", "")
+            full_answer += clean_chunk
+            yield clean_chunk
 
         # Return sources after stream (not possible in generator easily, handle in main)
         # We will expose a method to get sources for a query if needed, or just return them with the stream.

@@ -177,8 +177,25 @@ async def ask(request: QueryRequest):
         is_local = not request.language_code.lower().startswith("en")
         
         if is_local:
-            prompt = f"Translate this query from a patient in India to English. The query is about pregnancy health. Provide ONLY the English translation:\n\n{request.query}"
-            english_query = translator_llm.invoke(prompt).content.strip()
+            # More descriptive prompt for dialect-aware translation and language verification
+            prompt = f"Identify the language of this text and translate it to English. The text is from a rural Indian patient about pregnancy health. Provide the response as JSON: {{'detected_language': '...', 'english_translation': '...'}}.\n\nTEXT: {request.query}"
+            id_res = translator_llm.invoke(prompt).content.strip()
+            try:
+                # Basic JSON cleanup if LLM adds markdown
+                id_res_clean = id_res.strip('`').replace('json\n', '').strip()
+                id_data = json.loads(id_res_clean)
+                english_query = id_data.get('english_translation', request.query)
+                # Update language code if LLM detected a specific native language
+                detected_lang = id_data.get('detected_language', request.language_code)
+                if detected_lang and detected_lang.lower() != 'unknown':
+                    request.language_code = detected_lang
+                
+                # Keep tracked verified language for response
+                actual_language = request.language_code
+            except:
+                # Fallback to simple translation if JSON fails
+                prompt = f"Translate this query from a rural Indian patient to English. Provide ONLY the English translation:\n\n{request.query}"
+                english_query = translator_llm.invoke(prompt).content.strip()
 
         # 2. Convert history format
         history_msgs = []
@@ -193,10 +210,32 @@ async def ask(request: QueryRequest):
         for chunk in service.ask_stream(english_query, request.patient_data, history_msgs):
             english_answer += chunk
         
-        # 4. Translate Answer back to Local Language if needed
+        # 4. Translate Answer (Successive Fallback: Native -> Hindi -> NO ENGLISH)
         final_answer = english_answer.strip()
-        if is_local:
-            prompt = f"Translate this medical advice to {request.language_code}. Make it sound very empathetic and caring (like a friend or 'Asha Didi'). Use simple words. Provide ONLY the translation:\n\n{english_answer}"
+        
+        # Determine target language (Default to Hindi if unknown/English)
+        target_lang = request.language_code
+        if not target_lang or target_lang.lower() in ['unknown', 'en', 'en-in']:
+            target_lang = 'Hindi'
+            
+        try:
+            # Attempt Native Translation - Emphasis on NATIVE SCRIPT (LIPI)
+            prompt = f"Translate this medical advice to {target_lang}. TARGET: Rural Indian woman. TONE: Supportive 'Asha Didi'. CRITICAL: Use the NATIVE WRITTEN LIPI (Script). NEVER USE ENGLISH in the output. Provide ONLY the translation:\n\n{english_answer}"
+            final_answer = translator_llm.invoke(prompt).content.strip()
+            
+            # Zero-English Enforcement Check
+            if any(char.isalpha() for char in final_answer) and target_lang.lower() not in ['english', 'en']:
+                # If too much english/latin chars found, fallback to strict Hindi
+                if target_lang.lower() != 'hindi':
+                     target_lang = "Hindi"
+                     actual_language = "Hindi"
+                     prompt = f"The previous translation had English. Translate strictly to HINDI using Devanagari script. Provide ONLY the Hindi translation:\n\n{english_answer}"
+                     final_answer = translator_llm.invoke(prompt).content.strip()
+        except Exception as trans_err:
+            print(f"⚠️ Native translation failed, falling back to Hindi: {trans_err}")
+            target_lang = "Hindi"
+            actual_language = "Hindi"
+            prompt = f"Translate this medical advice to HINDI using Devanagari script. Provide ONLY the Hindi translation:\n\n{english_answer}"
             final_answer = translator_llm.invoke(prompt).content.strip()
 
         # 5. Extract clinical data (symptoms, medications, relief) in background
@@ -212,6 +251,7 @@ async def ask(request: QueryRequest):
             "english_query": english_query,
             "english_answer": english_answer.strip(),
             "localized_answer": final_answer,
+            "verified_language": target_lang,
             "status": "success"
         }
     except Exception as e:

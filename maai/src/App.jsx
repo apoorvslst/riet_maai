@@ -423,6 +423,7 @@ const VoiceInterface = ({ user }) => {
   const [interactionMode, setInteractionMode] = useState('IDLE'); // IDLE, LISTENING, PROCESSING, SPEAKING
   const [activeInputMode, setActiveInputMode] = useState('voice'); // 'text' | 'voice'
   const [selectedLanguage, setSelectedLanguage] = useState('unknown');
+  const [detectedLang, setDetectedLang] = useState(null);
   const [lastAudioBase64, setLastAudioBase64] = useState(null);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const audioChunksRef = React.useRef([]);
@@ -442,6 +443,7 @@ const VoiceInterface = ({ user }) => {
     setInteractionMode('IDLE');
     setTranscript('');
     setResponse('');
+    setDetectedLang(null);
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.stop();
       mediaRecorder.stream.getTracks().forEach(track => track.stop());
@@ -524,11 +526,46 @@ const VoiceInterface = ({ user }) => {
     try {
       setInteractionMode('PROCESSING');
 
-      // Map common 2-letter codes back to -IN for Sarvam TTS v3 consistency
+      // Map full language names or codes to Sarvam v3 -IN format
       let targetLang = langCode;
-      if (targetLang === 'hi') targetLang = 'hi-IN';
-      if (targetLang === 'en') targetLang = 'en-IN';
-      if (targetLang === 'unknown') targetLang = 'hi-IN';
+      const langLower = targetLang?.toLowerCase() || 'hindi';
+
+      const langMap = {
+        'marathi': 'mr-IN',
+        'hindi': 'hi-IN',
+        'bengali': 'bn-IN',
+        'telugu': 'te-IN',
+        'tamil': 'ta-IN',
+        'gujarati': 'gu-IN',
+        'kannada': 'kn-IN',
+        'malayalam': 'ml-IN',
+        'punjabi': 'pa-IN',
+        'assamese': 'as-IN',
+        'odia': 'or-IN',
+        'sanskrit': 'sa-IN',
+        'urdu': 'ur-IN',
+        'mr': 'mr-IN',
+        'hi': 'hi-IN',
+        'bn': 'bn-IN',
+        'te': 'te-IN',
+        'ta': 'ta-IN',
+        'gu': 'gu-IN',
+        'kn': 'kn-IN',
+        'ml': 'ml-IN',
+        'pa': 'pa-IN',
+        'as': 'as-IN',
+        'or': 'or-IN',
+        'ur': 'ur-IN'
+      };
+
+      if (langMap[langLower]) {
+        targetLang = langMap[langLower];
+      } else if (targetLang && !targetLang.includes('-')) {
+        targetLang = `${targetLang}-IN`;
+      }
+
+      if (targetLang?.toLowerCase().includes('unknown')) targetLang = 'hi-IN';
+      if (targetLang?.toLowerCase().includes('english')) targetLang = 'hi-IN'; // Fallback to Hindi speech if English encountered
 
       // ENSURE TEXT IS WITHIN SARVAM LIMIT (500 CHARS)
       const cleanText = text.length > 500 ? text.substring(0, 497) + "..." : text;
@@ -611,6 +648,7 @@ const VoiceInterface = ({ user }) => {
       const sttResult = await callSarvamSTT(audioBlob);
       const userText = sttResult.transcript;
       const langCode = sttResult.detectedLangCode;
+      setDetectedLang(langCode);
       setTranscript(`You: "${userText}"`);
 
       // 2. RAG via Backend
@@ -629,12 +667,17 @@ const VoiceInterface = ({ user }) => {
       });
       if (!res.ok) throw new Error(`Backend error: ${res.status}`);
       const data = await res.json();
+
+      // Sync verified language from backend
+      const finalLang = data.verified_language || langCode;
+      setDetectedLang(finalLang);
+
       const localizedAnswer = data.localized_answer || data.english_answer || "Diagnosis complete.";
       setResponse(localizedAnswer);
 
       // 3. TTS via Sarvam
       if (localizedAnswer.trim()) {
-        await speakText(localizedAnswer, langCode);
+        await speakText(localizedAnswer, finalLang);
       }
 
     } catch (error) {
@@ -647,12 +690,9 @@ const VoiceInterface = ({ user }) => {
     const formData = new FormData();
     formData.append('file', audioBlob, 'recording.webm');
     formData.append('model', 'saaras:v3');
-    // If unknown, Sarvam auto-detects, but we need to provide a hint or reasonable default if required.
-    // The model saaras:v3 handles multi-lingual quite well.
+    // No fallback hint; Sarvam saaras:v3 handles auto-detection effectively.
     if (selectedLanguage !== 'unknown') {
       formData.append('language_code', selectedLanguage);
-    } else {
-      formData.append('language_code', 'hi-IN'); // Fallback hint
     }
 
     const res = await fetch('https://api.sarvam.ai/speech-to-text', {
@@ -952,6 +992,25 @@ const VoiceInterface = ({ user }) => {
           >
             {transcript}
           </Motion.p>
+        )}
+
+        {detectedLang && (
+          <div style={{ marginTop: '0.5rem' }}>
+            <span style={{
+              fontSize: '0.75rem',
+              background: 'var(--accent)',
+              color: 'var(--primary)',
+              padding: '0.2rem 0.6rem',
+              borderRadius: '20px',
+              fontWeight: '600',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}>
+              <Globe size={12} />
+              Language: {SUPPORTED_LANGUAGES.find(l => l.code === detectedLang || l.code.split('-')[0] === detectedLang.split('-')[0])?.label || detectedLang}
+            </span>
+          </div>
         )}
         {response && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>

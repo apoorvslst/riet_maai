@@ -3,6 +3,8 @@ const router = express.Router();
 const twilio = require('twilio');
 const axios = require('axios');
 const FormData = require('form-data');
+const fs = require('fs');
+const path = require('path');
 const VoiceResponse = twilio.twiml.VoiceResponse;
 const HealthLog = require('../models/HealthLog');
 
@@ -23,6 +25,21 @@ const RAG_API_URL = process.env.RAG_API_URL || 'http://localhost:8000';
 
 // De-duplication
 const processedRecordings = new Set();
+
+// Language Mapping for Sarvam TTS
+const mapLanguageToSarvam = (lang) => {
+    if (!lang) return 'hi-IN';
+    const langLower = lang.toLowerCase();
+    const langMap = {
+        'marathi': 'mr-IN', 'hindi': 'hi-IN', 'bengali': 'bn-IN', 'telugu': 'te-IN',
+        'tamil': 'ta-IN', 'gujarati': 'gu-IN', 'kannada': 'kn-IN', 'malayalam': 'ml-IN',
+        'punjabi': 'pa-IN', 'assamese': 'as-IN', 'odia': 'or-IN', 'sanskrit': 'sa-IN',
+        'urdu': 'ur-IN', 'mr': 'mr-IN', 'hi': 'hi-IN', 'bn': 'bn-IN'
+    };
+    if (langMap[langLower]) return langMap[langLower];
+    if (langLower.includes('-in')) return langLower;
+    return 'hi-IN'; // Fallback
+};
 
 
 // ─── POST /api/voice/trigger ────────────────────────────────────────────────
@@ -119,23 +136,24 @@ router.post('/process-ai', async (req, res) => {
         const audioBuffer = Buffer.from(audioResponse.data);
         console.log(`📥 Downloaded ${audioBuffer.length} bytes`);
 
-        // ── STEP 2: Transcribe with Groq Whisper ────────────────────────
-        console.log('🗣️ Step 2: Transcribing with Groq Whisper...');
+        // ── STEP 2: Transcribe with Sarvam AI Saaras (Multilingual) ─────
+        console.log('🗣️ Step 2: Transcribing with Sarvam AI Saaras...');
         const formData = new FormData();
         formData.append('file', audioBuffer, { filename: 'recording.wav', contentType: 'audio/wav' });
-        formData.append('model', 'whisper-large-v3');
-        formData.append('language', 'hi');
-        formData.append('response_format', 'json');
+        formData.append('model', 'saaras:v3');
+        // No language_code provided here to allow auto-detection of 22 languages
 
-        const transcriptionResponse = await axios.post(
-            'https://api.groq.com/openai/v1/audio/transcriptions',
+        const sttResponse = await axios.post(
+            'https://api.sarvam.ai/speech-to-text',
             formData,
             {
-                headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, ...formData.getHeaders() },
+                headers: { 'api-subscription-key': SARVAM_API_KEY, ...formData.getHeaders() },
                 maxContentLength: Infinity, maxBodyLength: Infinity, timeout: 30000
             }
         );
-        const rawTranscription = transcriptionResponse.data.text || '';
+        const rawTranscription = sttResponse.data.transcript || '';
+        const detectedLangCode = sttResponse.data.language_code || 'hi-IN';
+        console.log(`🗣️ Detected Language: ${detectedLangCode}`);
         console.log(`🗣️ Transcription: "${rawTranscription}"`);
 
         // ── STEP 3: RAG — bilingual advice ──────────────────────────────
@@ -143,13 +161,14 @@ router.post('/process-ai', async (req, res) => {
         let ragAdviceNative = '';
         let ragAdviceEnglish = '';
         let userMessageEnglish = '';
+        let verifiedLanguage = 'Hindi';
 
         try {
             const ragResponse = await axios.post(
                 `${RAG_API_URL}/ask`,
                 {
                     query: rawTranscription,
-                    language_code: 'hi-IN',
+                    language_code: detectedLangCode, // Pass Sarvam detected lang to RAG
                     patient_data: `Mother called via Janani AI. Phone: ${callerPhone}.`,
                     history: []
                 },
@@ -158,9 +177,11 @@ router.post('/process-ai', async (req, res) => {
             ragAdviceNative = ragResponse.data.localized_answer || '';
             ragAdviceEnglish = ragResponse.data.english_answer || '';
             userMessageEnglish = ragResponse.data.english_query || '';
-            console.log(`📚 RAG English: "${ragAdviceEnglish.substring(0, 150)}..."`);
+            verifiedLanguage = ragResponse.data.verified_language || detectedLangCode;
+            console.log(`📚 RAG Verified Language: ${verifiedLanguage}`);
         } catch (ragError) {
-            console.error('⚠️ RAG error, using Groq fallback:', ragError.message);
+            console.error('⚠️ RAG error, using fallback:', ragError.message);
+            verifiedLanguage = detectedLangCode;
         }
 
         // ── STEP 4: Clinical Extraction — symptoms, medications, relief ──
@@ -281,22 +302,42 @@ RULES:
         const totalInteractions = updatedLog.history.length;
         console.log(`💾 Saved! User: ${callerPhone} | Interaction #${totalInteractions}`);
 
-        // ── STEP 6: Speak personalized response ─────────────────────────
+        // ── STEP 6: Speak personalized response via Sarvam TTS ──────────
         if (!isStatusCallback) {
             const finalAdvice = ragAdviceNative || summary || 'Kripya apne doctor se milein.';
-            let spokenResponse = 'Dhanyavaad. Aapki baat sun li gayi hai. ';
+            console.log(`🎙️ Step 6: Generating Sarvam TTS for: "${finalAdvice.substring(0, 50)}..."`);
 
-            if (severityScore >= 7) {
-                spokenResponse += 'Humne kuch gambhir lakshan pehchane hain. ';
-            }
-            spokenResponse += finalAdvice;
-            if (severityScore >= 7) {
-                spokenResponse += ' Kripya turant apne doctor se sampark karein.';
-            } else {
-                spokenResponse += ' Apna aur apne bachche ka khayal rakhein.';
-            }
+            try {
+                const sarvamTarget = mapLanguageToSarvam(verifiedLanguage);
+                const ttsResponse = await axios.post('https://api.sarvam.ai/text-to-speech', {
+                    inputs: [finalAdvice],
+                    target_language_code: sarvamTarget,
+                    speaker: "shreya",
+                    model: "bulbul:v3"
+                }, {
+                    headers: { 'Content-Type': 'application/json', 'api-subscription-key': SARVAM_API_KEY },
+                    timeout: 20000
+                });
 
-            twiml.say({ language: 'hi-IN', voice: 'Polly.Aditi' }, spokenResponse);
+                if (ttsResponse.data.audios && ttsResponse.data.audios[0]) {
+                    const audioBase64 = ttsResponse.data.audios[0];
+                    const fileName = `tts_${Date.now()}.wav`;
+                    const publicPath = path.join(__dirname, '..', 'public', 'tts');
+                    if (!fs.existsSync(publicPath)) fs.mkdirSync(publicPath, { recursive: true });
+
+                    const filePath = path.join(publicPath, fileName);
+                    fs.writeFileSync(filePath, audioBase64, 'base64');
+
+                    const audioUrl = `${WEBHOOK_BASE_URL}/public/tts/${fileName}`;
+                    console.log(`🎙️ TTS Generated: ${audioUrl}`);
+                    twiml.play(audioUrl);
+                } else {
+                    throw new Error("No audio returned from Sarvam");
+                }
+            } catch (ttsErr) {
+                console.error("⚠️ Sarvam TTS failed, falling back to Twilio Say:", ttsErr.message);
+                twiml.say({ language: 'hi-IN', voice: 'Polly.Aditi' }, finalAdvice);
+            }
         }
 
         console.log(`\n🧠 Pipeline completed! User: ${callerPhone} | Interactions: ${totalInteractions}\n`);
