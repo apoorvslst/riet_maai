@@ -13,7 +13,7 @@ const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER;
 const TARGET_PHONE = process.env.MY_PHONE_NUMBER;
-const WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL || 'https://riet-maai.onrender.com';
+const WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL || 'https://photomechanically-unmustered-sharyn.ngrok-free.dev';
 
 // ─── AI Keys ──────────────────────────────────────────────────────────────────
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
