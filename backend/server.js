@@ -11,19 +11,20 @@ const { initSummaryCron } = require('./services/summaryCron');
 const app = express();
 
 // Middleware
-const corsOptions = {
-    origin: 'http://localhost:5173',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
-};
-
-app.use(cors(corsOptions));
+app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use('/public', express.static('public'));
 
 // Routes
+app.get('/api/status', (req, res) => {
+    res.json({
+        status: "Janani AI Backend is Live",
+        mongodb: mongoose.connection.readyState === 1 ? "Connected" : "Disconnected",
+        timestamp: new Date().toISOString()
+    });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/voice', voiceRoutes);
 app.use('/api/inbound', inboundRoutes);
@@ -52,7 +53,8 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
+    console.log(`🌐 Webhook Base URL: ${process.env.WEBHOOK_BASE_URL || 'Not Set'}`);
 });
 
