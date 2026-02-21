@@ -1,0 +1,79 @@
+====================================================================
+JANANI AI — HEALTH BOOK
+Comprehensive Pregnancy & Maternal Care Knowledge Base
+====================================================================
+
+This file is the SINGLE SOURCE OF TRUTH for Janani AI's RAG system.
+Add your pregnancy health data below. The RAG will retrieve relevant
+sections to answer patient queries with accuracy.
+
+FORMAT: Write in plain English. Use headers (====) to separate topics.
+After adding data, run: python ingest.py
+This will re-index the data into the vector database.
+
+====================================================================
+SECTION: GENERAL PREGNANCY CARE
+====================================================================
+
+[ADD YOUR DATA HERE — e.g. trimester-wise care guidelines, nutrition,
+exercise, warning signs, fetal development milestones, etc.]
+
+====================================================================
+SECTION: WARNING SIGNS & EMERGENCIES
+====================================================================
+
+[ADD YOUR DATA HERE — e.g. bleeding, severe headache, vision changes,
+reduced fetal movement, high blood pressure, preeclampsia, etc.]
+
+====================================================================
+SECTION: NUTRITION & DIET
+====================================================================
+
+[ADD YOUR DATA HERE — e.g. iron-rich foods, folic acid, calcium,
+foods to avoid, hydration, weight gain guidelines, etc.]
+
+====================================================================
+SECTION: COMMON SYMPTOMS & REMEDIES
+====================================================================
+
+[ADD YOUR DATA HERE — e.g. morning sickness, back pain, swelling,
+heartburn, constipation, fatigue, insomnia remedies, etc.]
+
+====================================================================
+SECTION: MEDICATIONS & SUPPLEMENTS
+====================================================================
+
+[ADD YOUR DATA HERE — e.g. safe medications, iron tablets, folic acid,
+calcium supplements, prenatal vitamins, unsafe drugs, etc.]
+
+====================================================================
+SECTION: FETAL MOVEMENT & MONITORING
+====================================================================
+
+[ADD YOUR DATA HERE — e.g. kick count guidelines, when to worry,
+normal vs abnormal patterns, monitoring techniques, etc.]
+
+====================================================================
+SECTION: LABOR & DELIVERY PREPARATION
+====================================================================
+
+[ADD YOUR DATA HERE — e.g. signs of labor, when to go to hospital,
+breathing techniques, birth plan, postpartum care, etc.]
+
+====================================================================
+SECTION: MENTAL HEALTH & WELLBEING
+====================================================================
+
+[ADD YOUR DATA HERE — e.g. prenatal depression, anxiety management,
+stress relief, support systems, postpartum depression signs, etc.]
+
+====================================================================
+SECTION: PRACTICAL MEDICAL CASES
+====================================================================
+
+[ADD YOUR PRACTICAL CASE DATA HERE — real-world scenarios, doctor
+consultations, treatment protocols, case studies, etc.]
+
+====================================================================
+END OF HEALTH BOOK
+====================================================================

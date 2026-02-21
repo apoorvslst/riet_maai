@@ -24,7 +24,13 @@ import {
   AlertTriangle,
   ChevronRight,
   Clock,
-  Utensils
+  Utensils,
+  Globe,
+  Loader,
+  Ear,
+  RotateCcw,
+  Phone,
+  X
 } from 'lucide-react';
 import Auth from './Auth';
 import Dashboard from './Dashboard';
@@ -216,17 +222,19 @@ const Hero = ({ onAuthClick, user, setView }) => {
                   Go to Dashboard <ArrowRight size={20} />
                 </button>
               )}
-              <button style={{
-                background: 'transparent',
-                border: '2px solid var(--primary)',
-                color: 'var(--primary)',
-                padding: '1rem 2rem',
-                borderRadius: '50px',
-                fontWeight: '600',
-                cursor: 'pointer'
-              }}>
-                Learn More
-              </button>
+              <ScrollLink to="mission" smooth={true} duration={800} offset={-70}>
+                <button style={{
+                  background: 'transparent',
+                  border: '2px solid var(--primary)',
+                  color: 'var(--primary)',
+                  padding: '1rem 2rem',
+                  borderRadius: '50px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}>
+                  Learn More
+                </button>
+              </ScrollLink>
             </div>
           </Motion.div>
 
@@ -377,22 +385,254 @@ const FeatureCard = ({ icon: Icon, title, desc, delay }) => (
   </Motion.div>
 );
 
-const VoiceInterface = () => {
+const SARVAM_API_KEY = "sk_94vvqhgo_opzIH8VOZKtoPs894jfnFGAZ";
+
+const SUPPORTED_LANGUAGES = [
+  { code: 'unknown', label: '✨ Auto Detect', native: 'स्वचालित पहचान' },
+  { code: 'hi-IN', label: 'Hindi', native: 'हिंदी' },
+  { code: 'en-IN', label: 'English', native: 'English' },
+  { code: 'pa-IN', label: 'Punjabi', native: 'ਪੰਜਾਬੀ' },
+  { code: 'bn-IN', label: 'Bengali', native: 'বাংলা' },
+  { code: 'mr-IN', label: 'Marathi', native: 'मराठी' },
+  { code: 'gu-IN', label: 'Gujarati', native: 'ગુજરાતી' },
+  { code: 'ta-IN', label: 'Tamil', native: 'தமிழ்' },
+  { code: 'te-IN', label: 'Telugu', native: 'తెలుగు' },
+  { code: 'kn-IN', label: 'Kannada', native: 'ಕನ್ನಡ' },
+  { code: 'ml-IN', label: 'Malayalam', native: 'മലയാളം' },
+  { code: 'or-IN', label: 'Odia', native: 'ଓଡ଼ିଆ' },
+  { code: 'as-IN', label: 'Assamese', native: 'অসমীয়া' },
+  { code: 'ur-IN', label: 'Urdu', native: 'اردو' },
+  { code: 'sa-IN', label: 'Sanskrit', native: 'संस्कृतम्' },
+  { code: 'ks-IN', label: 'Kashmiri', native: 'کأشُر' },
+  { code: 'sd-IN', label: 'Sindhi', native: 'سنڌي' },
+  { code: 'doi-IN', label: 'Dogri', native: 'डोगरी' },
+  { code: 'kok-IN', label: 'Konkani', native: 'कोंकणी' },
+  { code: 'mni-IN', label: 'Manipuri', native: 'মণিপুরী' },
+  { code: 'mai-IN', label: 'Maithili', native: 'मैथिली' },
+  { code: 'sat-IN', label: 'Santali', native: 'संताली' },
+  { code: 'ne-NP', label: 'Nepali', native: 'नेपाली' }
+];
+
+const VoiceInterface = ({ user }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [showTextInput, setShowTextInput] = useState(false);
   const [textInput, setTextInput] = useState('');
   const [transcript, setTranscript] = useState('');
+  const [response, setResponse] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [interactionMode, setInteractionMode] = useState('IDLE'); // IDLE, LISTENING, PROCESSING, SPEAKING
+  const [activeInputMode, setActiveInputMode] = useState('voice'); // 'text' | 'voice'
+  const [selectedLanguage, setSelectedLanguage] = useState('unknown');
+  const [lastAudioBase64, setLastAudioBase64] = useState(null);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const audioChunksRef = React.useRef([]);
+  const audioPlayerRef = React.useRef(new Audio());
   const holdTimerRef = React.useRef(null);
   const isHoldingRef = React.useRef(false);
 
-  const startRecording = () => {
-    setIsRecording(true);
-    setTranscript('Audio Mode: Listening...');
+  useEffect(() => {
+    audioPlayerRef.current.onended = () => {
+      setInteractionMode('IDLE');
+    };
+  }, []);
+
+  const resetSession = () => {
+    audioPlayerRef.current.pause();
+    audioPlayerRef.current.currentTime = 0;
+    setInteractionMode('IDLE');
+    setTranscript('');
+    setResponse('');
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    }
+  };
+
+  const handleOrbClick = () => {
+    if (interactionMode === 'IDLE' || interactionMode === 'ERROR') {
+      startRecording();
+    } else if (interactionMode === 'LISTENING') {
+      stopRecording();
+    } else {
+      // If Speaking or Processing, a click resets the session
+      resetSession();
+    }
+  };
+
+  const handleRepeatAudio = () => {
+    if (lastAudioBase64) {
+      audioPlayerRef.current.currentTime = 0;
+      setInteractionMode('SPEAKING');
+      audioPlayerRef.current.play();
+    }
+  };
+
+  const handleSendText = async () => {
+    if (!textInput.trim()) return;
+
+    setIsLoading(true);
+    setResponse('');
+    setTranscript(`You: "${textInput}"`);
+    const queryTerm = textInput;
+    setTextInput('');
+
+    try {
+      setInteractionMode('PROCESSING');
+      const res = await fetch('http://localhost:8000/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: queryTerm,
+          language_code: selectedLanguage === 'unknown' ? 'en-IN' : selectedLanguage,
+          patient_data: user?.patientProfile || "General pregnancy wellness query from text input.",
+          user_phone: user?.phoneNumber || '',
+          user_email: user?.email || '',
+          user_name: user?.name || '',
+          source: 'website'
+        })
+      });
+
+      if (!res.ok) throw new Error(`Backend error: ${res.status}`);
+      const data = await res.json();
+      if (data.status === 'success') {
+        const localizedAnswer = data.localized_answer || data.english_answer;
+        setResponse(localizedAnswer);
+
+        // TTS via Sarvam
+        await speakText(localizedAnswer, selectedLanguage === 'unknown' ? 'en-IN' : selectedLanguage);
+      } else {
+        setResponse("I'm sorry, I encountered an error while processing your request.");
+        setInteractionMode('IDLE');
+      }
+    } catch (error) {
+      console.error("Error calling RAG service:", error);
+      setResponse("Could not connect to the Janani AI service.");
+      setInteractionMode('IDLE');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const speakText = async (text, langCode) => {
+    try {
+      setInteractionMode('PROCESSING');
+      const response = await fetch('https://api.sarvam.ai/text-to-speech', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-subscription-key': SARVAM_API_KEY
+        },
+        body: JSON.stringify({
+          inputs: [text],
+          target_language_code: langCode,
+          speaker: "shreya",
+          model: "bulbul:v3"
+        })
+      });
+      const data = await response.json();
+      const audioBase64 = data.audios[0];
+      setLastAudioBase64(audioBase64);
+      audioPlayerRef.current.src = `data:audio/wav;base64,${audioBase64}`;
+      setInteractionMode('SPEAKING');
+      await audioPlayerRef.current.play();
+    } catch (err) {
+      console.error("TTS failed:", err);
+      setInteractionMode('IDLE');
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, sampleRate: 16000 }
+      });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+      audioChunksRef.current = [];
+      recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      recorder.onstop = processAudio;
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      setInteractionMode('LISTENING');
+      setTranscript('Listening carefully...');
+      setResponse('');
+    } catch (err) {
+      console.error("Mic access denied:", err);
+    }
   };
 
   const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    }
     setIsRecording(false);
-    setTranscript('Audio Processed Successfully.');
+  };
+
+  const processAudio = async () => {
+    setInteractionMode('PROCESSING');
+    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    if (audioBlob.size < 1000) {
+      setInteractionMode('IDLE');
+      setTranscript('Audio too short.');
+      return;
+    }
+
+    try {
+      // 1. STT via Sarvam
+      setTranscript('Transcribing...');
+      const sttResult = await callSarvamSTT(audioBlob);
+      const userText = sttResult.transcript;
+      const langCode = sttResult.detectedLangCode;
+      setTranscript(`You: "${userText}"`);
+
+      // 2. RAG via Backend
+      const res = await fetch('http://localhost:8000/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: userText,
+          language_code: langCode,
+          patient_data: user?.patientProfile || "Voice query from rural patient.",
+          user_phone: user?.phoneNumber || '',
+          user_email: user?.email || '',
+          user_name: user?.name || '',
+          source: 'website'
+        })
+      });
+      if (!res.ok) throw new Error(`Backend error: ${res.status}`);
+      const data = await res.json();
+      const localizedAnswer = data.localized_answer;
+      setResponse(localizedAnswer);
+
+      // 3. TTS via Sarvam
+      await speakText(localizedAnswer, langCode);
+
+    } catch (error) {
+      console.error("Voice processing failed:", error);
+      setInteractionMode('IDLE');
+    }
+  };
+
+  const callSarvamSTT = async (audioBlob) => {
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'recording.webm');
+    formData.append('model', 'saaras:v3');
+    // If unknown, Sarvam auto-detects, but we need to provide a hint or reasonable default if required.
+    // The model saaras:v3 handles multi-lingual quite well.
+    if (selectedLanguage !== 'unknown') {
+      formData.append('language_code', selectedLanguage);
+    } else {
+      formData.append('language_code', 'hi-IN'); // Fallback hint
+    }
+
+    const res = await fetch('https://api.sarvam.ai/speech-to-text', {
+      method: 'POST',
+      headers: { 'api-subscription-key': SARVAM_API_KEY },
+      body: formData
+    });
+    const data = await res.json();
+    return { transcript: data.transcript, detectedLangCode: data.language_code || (selectedLanguage === 'unknown' ? 'hi-IN' : selectedLanguage) };
   };
 
   const handlePointerDown = (e) => {
@@ -440,88 +680,203 @@ const VoiceInterface = () => {
         textAlign: 'center'
       }}
     >
-      <h3 style={{ marginBottom: '1.5rem', color: 'var(--primary)' }}>Voice-Based Health Assistant</h3>
-      <p style={{ color: 'var(--text-light)', marginBottom: '2rem' }}>
-        Speak in your local language (Hindi, Marathi, Tamil) to record your symptoms or ask a question.
+      <p style={{ color: 'var(--text-light)', marginBottom: '1rem' }}>
+        How would you like to interact with Janani?
       </p>
 
-      <div style={{ position: 'relative', display: 'inline-block' }}>
-        <AnimatePresence>
-          {isRecording && (
-            <Motion.div
-              initial={{ scale: 1, opacity: 0.5 }}
-              animate={{ scale: 2, opacity: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 1, repeat: Infinity }}
-              style={{
-                position: 'absolute',
-                top: 0, left: 0, right: 0, bottom: 0,
-                background: 'var(--primary)',
-                borderRadius: '50%',
-                zIndex: 0
-              }}
-            />
-          )}
-        </AnimatePresence>
-
-        <Motion.button
-          layoutId="shared-mic"
-          onPointerDown={handlePointerDown}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={() => {
-            if (isHoldingRef.current) stopRecording();
-            if (holdTimerRef.current) {
-              clearTimeout(holdTimerRef.current);
-              holdTimerRef.current = null;
-            }
-          }}
-          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          style={{
-            width: '85px',
-            height: '85px',
-            borderRadius: '50%',
-            background: isRecording ? 'var(--primary-light)' : 'var(--primary)',
-            border: 'none',
-            color: 'white',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            cursor: 'pointer',
-            position: 'relative',
-            zIndex: 10,
-            boxShadow: '0 10px 25px rgba(176, 24, 84, 0.4)',
-            touchAction: 'none'
-          }}
-        >
-          {isRecording ? <Volume2 size={35} /> : <Mic size={35} />}
-        </Motion.button>
+      {/* Mode Switcher */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
+        <div style={{
+          background: '#f1f5f9',
+          padding: '4px',
+          borderRadius: '50px',
+          display: 'flex',
+          gap: '4px'
+        }}>
+          <button
+            onClick={() => { setActiveInputMode('voice'); resetSession(); }}
+            style={{
+              padding: '0.6rem 1.5rem',
+              borderRadius: '50px',
+              border: 'none',
+              background: activeInputMode === 'voice' ? 'white' : 'transparent',
+              boxShadow: activeInputMode === 'voice' ? '0 2px 8px rgba(0,0,0,0.1)' : 'none',
+              color: activeInputMode === 'voice' ? 'var(--primary)' : '#64748b',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              transition: 'all 0.3s'
+            }}
+          >
+            <Mic size={18} /> Voice
+          </button>
+          <button
+            onClick={() => { setActiveInputMode('text'); resetSession(); }}
+            style={{
+              padding: '0.6rem 1.5rem',
+              borderRadius: '50px',
+              border: 'none',
+              background: activeInputMode === 'text' ? 'white' : 'transparent',
+              boxShadow: activeInputMode === 'text' ? '0 2px 8px rgba(0,0,0,0.1)' : 'none',
+              color: activeInputMode === 'text' ? 'var(--primary)' : '#64748b',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              transition: 'all 0.3s'
+            }}
+          >
+            <MessageSquare size={18} /> Text
+          </button>
+        </div>
       </div>
 
-      <AnimatePresence>
-        {showTextInput && (
-          <Motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            style={{ marginTop: '2.5rem', overflow: 'hidden' }}
-          >
-            <div style={{ position: 'relative', maxWidth: '500px', margin: '0 auto' }}>
-              <input
-                type="text"
-                placeholder="Type your health concern here..."
-                value={textInput}
-                onChange={(e) => setTextInput(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '1.2rem 1.5rem',
-                  borderRadius: '50px',
-                  border: '2px solid var(--accent)',
-                  fontSize: '1rem',
-                  outline: 'none',
-                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
-                }}
-              />
-              <button style={{
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2.5rem' }}>
+        <div style={{
+          background: 'white',
+          padding: '0.75rem 1.25rem',
+          borderRadius: '20px',
+          border: '1px solid var(--accent)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.8rem',
+          boxShadow: '0 4px 12px rgba(176, 24, 84, 0.05)',
+          width: '100%',
+          maxWidth: '350px'
+        }}>
+          <Globe size={20} color="var(--primary)" />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+            <span style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Language (भाषा)</span>
+            <select
+              value={selectedLanguage}
+              onChange={(e) => setSelectedLanguage(e.target.value)}
+              style={{
+                border: 'none',
+                outline: 'none',
+                background: 'transparent',
+                fontWeight: '700',
+                fontSize: '1.05rem',
+                color: 'var(--text-dark)',
+                cursor: 'pointer',
+                width: '100%',
+                marginTop: '2px'
+              }}
+            >
+              {SUPPORTED_LANGUAGES.map(lang => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.native} ({lang.label})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ minHeight: '150px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        {activeInputMode === 'voice' ? (
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <AnimatePresence>
+              {interactionMode === 'SPEAKING' && (
+                [0, 1, 2].map((i) => (
+                  <Motion.div
+                    key={i}
+                    initial={{ scale: 1, opacity: 0.6 }}
+                    animate={{ scale: 2.2, opacity: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      delay: i * 0.6,
+                      ease: "easeOut"
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: 0, left: 0, right: 0, bottom: 0,
+                      background: interactionMode === 'LISTENING' ? '#ef4444' : (interactionMode === 'SPEAKING' ? '#3b82f6' : '#f59e0b'),
+                      borderRadius: '50%',
+                      zIndex: 0
+                    }}
+                  />
+                ))
+              )}
+            </AnimatePresence>
+
+            <Motion.button
+              onClick={handleOrbClick}
+              whileTap={{ scale: 0.92 }}
+              style={{
+                width: '120px',
+                height: '120px',
+                minWidth: '120px',
+                minHeight: '120px',
+                borderRadius: '50%',
+                background: interactionMode === 'LISTENING' ? '#ef4444' : (interactionMode === 'SPEAKING' ? '#3b82f6' : (interactionMode === 'PROCESSING' ? '#f59e0b' : 'var(--primary)')),
+                border: 'none',
+                color: 'white',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                cursor: 'pointer',
+                position: 'relative',
+                zIndex: 10,
+                boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)',
+                margin: '0 auto',
+                touchAction: 'none'
+              }}
+            >
+              {interactionMode === 'LISTENING' ? (
+                <Ear size={50} />
+              ) : (interactionMode === 'SPEAKING' ? (
+                <Motion.div
+                  animate={{ scale: [1, 1.1, 1] }}
+                  transition={{ repeat: Infinity, duration: 1.5 }}
+                >
+                  <Volume2 size={40} />
+                </Motion.div>
+              ) : (interactionMode === 'PROCESSING' ? (
+                <Motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+                  style={{ display: 'flex' }}
+                >
+                  <Loader size={40} />
+                </Motion.div>
+              ) : <Mic size={45} />))}
+            </Motion.button>
+            <p style={{ marginTop: '1rem', fontWeight: 'bold', color: 'var(--text-light)' }}>
+              {interactionMode === 'IDLE' ? 'Tap to Speak' : ''}
+              {interactionMode === 'LISTENING' ? 'Listening... Tap to Stop' : ''}
+              {interactionMode === 'SPEAKING' ? 'Janani Speaking...' : ''}
+              {interactionMode === 'PROCESSING' ? 'Thinking...' : ''}
+            </p>
+          </div>
+        ) : (
+          <div style={{ position: 'relative', maxWidth: '500px', width: '100%', margin: '0 auto' }}>
+            <input
+              type="text"
+              placeholder="Type your health concern here..."
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSendText()}
+              disabled={isLoading}
+              style={{
+                width: '100%',
+                padding: '1.2rem 1.5rem',
+                borderRadius: '50px',
+                border: '2px solid var(--accent)',
+                fontSize: '1rem',
+                outline: 'none',
+                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)',
+                opacity: isLoading ? 0.7 : 1
+              }}
+            />
+            <button
+              onClick={handleSendText}
+              disabled={isLoading}
+              style={{
                 position: 'absolute',
                 right: '8px',
                 top: '50%',
@@ -535,16 +890,21 @@ const VoiceInterface = () => {
                 cursor: 'pointer',
                 display: 'flex',
                 justifyContent: 'center',
-                alignItems: 'center'
-              }}>
+                alignItems: 'center',
+                opacity: isLoading ? 0.7 : 1
+              }}
+            >
+              {isLoading ? (
+                <Loader size={20} className="animate-spin" />
+              ) : (
                 <ArrowRight size={20} />
-              </button>
-            </div>
-          </Motion.div>
+              )}
+            </button>
+          </div>
         )}
-      </AnimatePresence>
+      </div>
 
-      <div style={{ marginTop: '2rem', minHeight: '60px' }}>
+      <div style={{ marginTop: '2rem', minHeight: '60px', width: '100%' }}>
         {transcript && (
           <Motion.p
             initial={{ opacity: 0 }}
@@ -556,26 +916,75 @@ const VoiceInterface = () => {
               padding: '1rem',
               background: 'white',
               borderRadius: '12px',
-              borderLeft: '4px solid var(--primary)'
+              borderLeft: '4px solid var(--primary)',
+              display: 'inline-block',
+              maxWidth: '90%'
             }}
           >
-            "{transcript}"
+            {transcript}
           </Motion.p>
         )}
-        {!transcript && isRecording && <p style={{ color: 'var(--text-light)', fontWeight: 'bold' }}>Hold to Record...</p>}
+        {response && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <Motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              style={{
+                marginTop: '1.5rem',
+                padding: '1.5rem',
+                background: 'white',
+                borderRadius: '24px',
+                border: '1px solid var(--accent)',
+                boxShadow: 'var(--shadow-md)',
+                textAlign: 'left',
+                position: 'relative',
+                width: '100%'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
+                <Bot size={24} color="var(--primary)" />
+                <strong style={{ color: 'var(--primary)' }}>Janani AI:</strong>
+              </div>
+              <p style={{ color: 'var(--text-dark)', lineHeight: '1.6', fontSize: '1.05rem' }}>{response}</p>
+            </Motion.div>
+
+            {lastAudioBase64 && (
+              <button
+                onClick={handleRepeatAudio}
+                style={{
+                  marginTop: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.6rem 1.2rem',
+                  borderRadius: '50px',
+                  background: 'white',
+                  border: '1px solid var(--accent)',
+                  color: 'var(--primary)',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  boxShadow: 'var(--shadow-sm)',
+                  transition: 'background 0.3s'
+                }}
+              >
+                <RotateCcw size={18} /> फिर से सुनें (Repeat)
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </Motion.div>
   );
 };
 
-const MainContent = ({ assistantRef }) => {
+const MainContent = ({ assistantRef, user }) => {
   return (
     <section style={{ background: 'transparent', minHeight: 'auto', paddingBottom: '150px' }}>
       <div className="container">
         {/* Voice Input Interface Relocated to Top */}
         <Element name="voice-assistant">
           <div ref={assistantRef}>
-            <VoiceInterface />
+            <VoiceInterface user={user} />
           </div>
         </Element>
 
@@ -637,92 +1046,187 @@ const MainContent = ({ assistantRef }) => {
   );
 };
 
-const ContactModal = ({ onClose, onProceed, loading }) => (
-  <Motion.div
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-    style={{
-      position: 'fixed',
-      top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(0,0,0,0.6)',
-      backdropFilter: 'blur(8px)',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 2000,
-      padding: '20px'
-    }}
-    onClick={onClose}
-  >
+// ─── Contact/Support Modal with RAG Chat ──────────────────────────────────────
+const ContactModal = ({ onClose, onProceed, loading, user, selectedLanguage }) => {
+  const [supportInput, setSupportInput] = useState('');
+  const [supportResponse, setSupportResponse] = useState('');
+  const [isSupportLoading, setIsSupportLoading] = useState(false);
+
+  const handleSupportSend = async () => {
+    if (!supportInput.trim()) return;
+    setIsSupportLoading(true);
+    setSupportResponse('');
+    const queryTerm = supportInput;
+    setSupportInput('');
+
+    try {
+      const res = await fetch('http://localhost:8000/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: queryTerm,
+          language_code: selectedLanguage === 'unknown' ? 'en-IN' : selectedLanguage,
+          patient_data: user?.patientProfile || "General support query from website contact modal.",
+          user_phone: user?.phoneNumber || '',
+          user_email: user?.email || '',
+          user_name: user?.name || '',
+          source: 'support_chat'
+        })
+      });
+
+      if (!res.ok) throw new Error(`Backend error: ${res.status}`);
+      const data = await res.json();
+      if (data.status === 'success') {
+        const localizedAnswer = data.localized_answer || data.english_answer;
+        setSupportResponse(localizedAnswer);
+      } else {
+        setSupportResponse("I'm sorry, I encountered an error while processing your request.");
+      }
+    } catch (error) {
+      console.error("Error calling RAG service for support:", error);
+      setSupportResponse("Could not connect to the Janani AI service.");
+    } finally {
+      setIsSupportLoading(false);
+    }
+  };
+
+  return (
     <Motion.div
-      initial={{ scale: 0.9, y: 20 }}
-      animate={{ scale: 1, y: 0 }}
-      exit={{ scale: 0.9, y: 20 }}
-      onClick={(e) => e.stopPropagation()}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       style={{
-        background: 'white',
-        padding: '3rem',
-        borderRadius: '32px',
-        maxWidth: '500px',
-        width: '100%',
-        textAlign: 'center',
-        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
-      }}
-    >
-      <div style={{
-        width: '80px',
-        height: '80px',
-        background: '#fce4ec',
-        borderRadius: '50%',
+        position: 'fixed',
+        top: 0, left: 0, right: 0, bottom: 0,
+        background: 'rgba(0,0,0,0.6)',
+        backdropFilter: 'blur(8px)',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        margin: '0 auto 2rem'
-      }}>
-        <Users color="var(--primary)" size={40} />
-      </div>
-      <h2 style={{ marginBottom: '1rem', color: 'var(--text-dark)' }}>Support Connection</h2>
-      <p style={{ color: 'var(--text-light)', marginBottom: '2.5rem', lineHeight: '1.6' }}>
-        Would you like to initiate a secure voice call with our medical support team?
-        The call will be connected to your registered number shortly.
-      </p>
-      <div style={{ display: 'flex', gap: '1rem' }}>
-        <button
-          onClick={onClose}
-          style={{
-            flex: 1,
-            padding: '1rem',
-            borderRadius: '50px',
-            border: '2px solid #eee',
-            background: 'white',
-            fontWeight: '600',
-            cursor: 'pointer'
-          }}
-        >
-          Cancel
-        </button>
-        <button
-          onClick={onProceed}
-          disabled={loading}
-          style={{
-            flex: 2,
-            padding: '1rem',
-            borderRadius: '50px',
-            border: 'none',
-            background: 'var(--primary)',
-            color: 'white',
-            fontWeight: '600',
-            cursor: 'pointer',
-            opacity: loading ? 0.7 : 1
-          }}
-        >
-          {loading ? 'Initiating...' : 'Yes, Connect Me'}
-        </button>
-      </div>
+        zIndex: 2000,
+        padding: '20px'
+      }}
+      onClick={onClose}
+    >
+      <Motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'white',
+          padding: '2.5rem',
+          borderRadius: '32px',
+          maxWidth: '550px',
+          width: '100%',
+          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1.5rem'
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ width: '48px', height: '48px', background: 'var(--accent)', borderRadius: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <Users color="var(--primary)" size={24} />
+            </div>
+            <h2 style={{ margin: 0, color: 'var(--text-dark)', fontSize: '1.5rem' }}>Janani Support</h2>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
+            <X size={24} />
+          </button>
+        </div>
+
+        <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '20px', minHeight: '120px', maxHeight: '300px', overflowY: 'auto' }}>
+          {supportResponse ? (
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <Bot color="var(--primary)" size={20} style={{ flexShrink: 0, marginTop: '4px' }} />
+              <div>
+                <p style={{ margin: 0, color: 'var(--text-dark)', lineHeight: '1.6', fontSize: '0.95rem' }}>{supportResponse}</p>
+              </div>
+            </div>
+          ) : isSupportLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+              <Loader size={24} className="animate-spin" color="var(--primary)" />
+              <span style={{ marginLeft: '10px', color: 'var(--primary)', fontWeight: '500' }}>Thinking...</span>
+            </div>
+          ) : (
+            <p style={{ color: '#64748b', textAlign: 'center', margin: '2rem 0' }}>
+              How can we help you today? Type your query below and Janani AI will assist you using her medical knowledge.
+            </p>
+          )}
+        </div>
+
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            placeholder="Describe your concern..."
+            value={supportInput}
+            onChange={(e) => setSupportInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSupportSend()}
+            disabled={isSupportLoading}
+            style={{
+              width: '100%',
+              padding: '1rem 3.5rem 1rem 1.5rem',
+              borderRadius: '50px',
+              border: '2px solid var(--accent)',
+              fontSize: '1rem',
+              outline: 'none'
+            }}
+          />
+          <button
+            onClick={handleSupportSend}
+            disabled={isSupportLoading || !supportInput.trim()}
+            style={{
+              position: 'absolute',
+              right: '8px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'var(--primary)',
+              color: 'white',
+              border: 'none',
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              cursor: 'pointer',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              opacity: (isSupportLoading || !supportInput.trim()) ? 0.5 : 1
+            }}
+          >
+            <ArrowRight size={18} />
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+          <button
+            onClick={onProceed}
+            disabled={loading}
+            style={{
+              flex: 1,
+              padding: '0.8rem',
+              borderRadius: '50px',
+              border: '2px solid #ef4444',
+              background: 'white',
+              color: '#ef4444',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '0.5rem',
+              opacity: loading ? 0.7 : 1
+            }}
+          >
+            <Phone size={18} />
+            {loading ? 'Calling...' : 'Connect to Voice Support'}
+          </button>
+        </div>
+      </Motion.div>
     </Motion.div>
-  </Motion.div>
-);
+  );
+};
 
 const Footer = ({ user }) => (
   <footer style={{ background: '#0f172a', color: 'white', padding: '4rem 0' }}>
@@ -890,7 +1394,7 @@ function App() {
           <Motion.div key="landing">
             <Hero onAuthClick={() => setShowAuth(true)} user={user} setView={setView} />
             <DemoSection />
-            <MainContent assistantRef={assistantRef} />
+            <MainContent assistantRef={assistantRef} user={user} />
           </Motion.div>
         ) : (
           <Dashboard
@@ -916,6 +1420,8 @@ function App() {
             onClose={() => setShowContact(false)}
             onProceed={handleTriggerCall}
             loading={contactLoading}
+            user={user}
+            selectedLanguage={view === 'landing' ? 'hi-IN' : 'en-IN'} // Default to Hindi for landing, English for dashboard
           />
         )}
       </AnimatePresence>
