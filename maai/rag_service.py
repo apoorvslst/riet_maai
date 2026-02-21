@@ -25,6 +25,18 @@ class PregnancyRAGService:
 
         # 2. Initialize Vector DB
         embeddings = FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
+        
+        # Ensure vectordb exists and is populated from health_book.txt
+        index_exists = os.path.exists(persist_directory) and any(os.listdir(persist_directory))
+        if not index_exists:
+            print(f"⚠️ VectorDB at {persist_directory} not found or empty. Initializing from health_book.txt...")
+            from ingest import ingest_docs
+            health_file = "health_book.txt"
+            if os.path.exists(health_file):
+                ingest_docs(health_file, persist_directory)
+            else:
+                print(f"❌ Error: {health_file} not found. RAG service will have no medical context.")
+
         self.vectordb = Chroma(
             persist_directory=persist_directory,
             embedding_function=embeddings,
@@ -35,9 +47,10 @@ class PregnancyRAGService:
         # 3. Prompt - Structured for Human/AI messages
         self.rag_prompt = ChatPromptTemplate.from_messages([
             ("system", """You are a highly professional medical assistant specializing in pregnancy health named "Janani".
-Your goal is to provide clear, accurate, to the point and safe answers. 
-You need to give the advice to help the user with their pregnancy health.
-Please reframe the answer such that its average length is about 30 words.
+- Your goal is to provide clear, accurate, to the point and safe answers. 
+- Keep your answers EXTREMELY BRIEF and CONCISE. 
+- STICK TO A MAXIMUM OF 30 WORDS AND 300 CHARACTERS.
+- Refrain from long explanations. Give direct advice.
 
 HANDLING GREETINGS:
 - If the user says "hello", "hi", or other greetings, respond warmly and ask how you can help.

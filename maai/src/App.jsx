@@ -495,11 +495,13 @@ const VoiceInterface = ({ user }) => {
       if (!res.ok) throw new Error(`Backend error: ${res.status}`);
       const data = await res.json();
       if (data.status === 'success') {
-        const localizedAnswer = data.localized_answer || data.english_answer;
+        const localizedAnswer = data.localized_answer || data.english_answer || "I'm sorry, I couldn't generate a specific answer.";
         setResponse(localizedAnswer);
 
         // TTS via Sarvam
-        await speakText(localizedAnswer, selectedLanguage === 'unknown' ? 'en-IN' : selectedLanguage);
+        if (localizedAnswer.trim()) {
+          await speakText(localizedAnswer, selectedLanguage === 'unknown' ? 'hi-IN' : selectedLanguage);
+        }
       } else {
         setResponse("I'm sorry, I encountered an error while processing your request.");
         setInteractionMode('IDLE');
@@ -514,8 +516,23 @@ const VoiceInterface = ({ user }) => {
   };
 
   const speakText = async (text, langCode) => {
+    if (!text || !text.trim()) {
+      console.warn("TTS skipped: empty text");
+      return;
+    }
+
     try {
       setInteractionMode('PROCESSING');
+
+      // Map common 2-letter codes back to -IN for Sarvam TTS v3 consistency
+      let targetLang = langCode;
+      if (targetLang === 'hi') targetLang = 'hi-IN';
+      if (targetLang === 'en') targetLang = 'en-IN';
+      if (targetLang === 'unknown') targetLang = 'hi-IN';
+
+      // ENSURE TEXT IS WITHIN SARVAM LIMIT (500 CHARS)
+      const cleanText = text.length > 500 ? text.substring(0, 497) + "..." : text;
+
       const response = await fetch('https://api.sarvam.ai/text-to-speech', {
         method: 'POST',
         headers: {
@@ -523,13 +540,23 @@ const VoiceInterface = ({ user }) => {
           'api-subscription-key': SARVAM_API_KEY
         },
         body: JSON.stringify({
-          inputs: [text],
-          target_language_code: langCode,
+          inputs: [cleanText],
+          target_language_code: targetLang,
           speaker: "shreya",
           model: "bulbul:v3"
         })
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Sarvam TTS error: ${response.status} - ${JSON.stringify(errorData)}`);
+      }
+
       const data = await response.json();
+      if (!data.audios || !data.audios[0]) {
+        throw new Error("Sarvam TTS returned success but no audio data.");
+      }
+
       const audioBase64 = data.audios[0];
       setLastAudioBase64(audioBase64);
       audioPlayerRef.current.src = `data:audio/wav;base64,${audioBase64}`;
@@ -602,11 +629,13 @@ const VoiceInterface = ({ user }) => {
       });
       if (!res.ok) throw new Error(`Backend error: ${res.status}`);
       const data = await res.json();
-      const localizedAnswer = data.localized_answer;
+      const localizedAnswer = data.localized_answer || data.english_answer || "Diagnosis complete.";
       setResponse(localizedAnswer);
 
       // 3. TTS via Sarvam
-      await speakText(localizedAnswer, langCode);
+      if (localizedAnswer.trim()) {
+        await speakText(localizedAnswer, langCode);
+      }
 
     } catch (error) {
       console.error("Voice processing failed:", error);
