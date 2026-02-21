@@ -16,7 +16,7 @@ class PregnancyRAGService:
         # 1. Initialize LLM (Llama 3 via Groq)
         self.llm = ChatGroq(
             temperature=0.1,
-            model_name="llama-3.3-70b-versatile",
+            model_name="llama-3.1-8b-instant",  # Higher rate limits than 70b; fast for voice
             groq_api_key=os.getenv("GROQ_API_KEY")
         )
 
