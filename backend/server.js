@@ -49,6 +49,25 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use('/public', express.static('public'));
 
+// Health Check
+app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
+
+const axios = require('axios');
+
+// Proxy route for /ask (Python AI service)
+app.post('/ask', async (req, res) => {
+    try {
+        const pythonResponse = await axios.post('http://localhost:8000/ask', req.body);
+        res.json(pythonResponse.data);
+    } catch (error) {
+        console.error('Error proxying to Python service:', error.message);
+        res.status(error.response?.status || 500).json({
+            message: 'AI Service Error',
+            error: error.message
+        });
+    }
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/voice', voiceRoutes);
