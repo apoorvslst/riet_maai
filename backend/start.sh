@@ -9,7 +9,7 @@ pip install -r requirements.txt 2>/dev/null || echo "⚠️ pip install skipped 
 
 # Start Python RAG API in the background (subshell so main shell stays in /app)
 echo "🚀 Starting Python AI Service on port 8000..."
-(cd python && python3 api.py) &
+(cd python && python3 -u api.py 2>&1) &
 PYTHON_PID=$!
 
 # Wait for Python to be ready with retry loop (up to 120 seconds)

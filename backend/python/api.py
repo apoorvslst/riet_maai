@@ -48,20 +48,10 @@ mongo_client = AsyncIOMotorClient(MONGO_URI)
 db = mongo_client.get_default_database("test")
 health_logs_collection = db["healthlogs"]
 
-# ─── Initialize RAG Service ─────────────────────────────────────────────────
-service = PregnancyRAGService()
-
-# ─── Initialize Groq LLMs (Fallbacks) ───────────────────────────────────────
-translator_llm = ChatGroq(
-    temperature=0,
-    model_name="llama-3.3-70b-versatile",
-    groq_api_key=os.getenv("GROQ_API_KEY")
-)
-clinical_llm = ChatGroq(
-    temperature=0.2,
-    model_name="llama-3.3-70b-versatile",
-    groq_api_key=os.getenv("GROQ_API_KEY")
-)
+# ─── Deferred Initialization (set during startup) ───────────────────────────
+service = None
+translator_llm = None
+clinical_llm = None
 
 
 # ─── Pydantic Models ─────────────────────────────────────────────────────────
@@ -221,6 +211,9 @@ async def save_to_mongodb(request: QueryRequest, eng_query: str, eng_answer: str
 @app.post("/ask")
 async def ask(request: QueryRequest):
     try:
+        if service is None:
+            raise HTTPException(status_code=503, detail="AI service is still initializing. Please try again in 30 seconds.")
+
         print(f"\n📥 /ask | lang={request.language_code} | query='{request.query[:60]}'")
 
         # 1. Translate query to English for RAG
@@ -290,12 +283,43 @@ async def health():
 
 # ─── Startup ─────────────────────────────────────────────────────────────────
 @app.on_event("startup")
-async def startup_db():
+async def startup():
+    global service, translator_llm, clinical_llm
+
+    # 1. MongoDB
     try:
         await mongo_client.admin.command("ping")
         print("✅ MongoDB connected from Python RAG API")
     except Exception as e:
         print(f"⚠️ MongoDB connection warning: {e}")
+
+    # 2. Groq LLMs
+    try:
+        groq_key = os.getenv("GROQ_API_KEY")
+        print(f"🔑 GROQ_API_KEY present: {bool(groq_key)}")
+        translator_llm = ChatGroq(
+            temperature=0,
+            model_name="llama-3.3-70b-versatile",
+            groq_api_key=groq_key
+        )
+        clinical_llm = ChatGroq(
+            temperature=0.2,
+            model_name="llama-3.3-70b-versatile",
+            groq_api_key=groq_key
+        )
+        print("✅ Groq LLMs initialized")
+    except Exception as e:
+        print(f"❌ Groq LLM init failed: {e}")
+        import traceback; traceback.print_exc()
+
+    # 3. RAG Service (heaviest — downloads model + ingests health_book.txt)
+    try:
+        print("🧠 Initializing RAG Service (this may take 1-2 minutes on first run)...")
+        service = PregnancyRAGService()
+        print("✅ RAG Service initialized")
+    except Exception as e:
+        print(f"❌ RAG Service init failed: {e}")
+        import traceback; traceback.print_exc()
 
 
 if __name__ == "__main__":
