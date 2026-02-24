@@ -86,10 +86,11 @@ app.post('/api/ask', async (req, res) => {
         });
         res.json(pythonResponse.data);
     } catch (error) {
-        console.error('Error proxying to Python service:', error.message);
-        res.status(error.response?.status || 500).json({
-            message: 'AI Service Error',
-            error: error.message,
+        console.error('Error proxying to Python service:', error.message || error.code || 'Unknown error');
+        console.error('  → Is Python running on port 8000?', error.code === 'ECONNREFUSED' ? 'NO - Python service is not reachable' : '');
+        res.status(error.response?.status || 502).json({
+            message: 'AI Service Error - Python RAG service may still be starting up',
+            error: error.message || error.code,
             details: error.response?.data
         });
     }

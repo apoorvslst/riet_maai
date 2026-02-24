@@ -282,6 +282,12 @@ async def ask(request: QueryRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─── Health Check ────────────────────────────────────────────────────────────
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "python-rag"}
+
+
 # ─── Startup ─────────────────────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup_db():
