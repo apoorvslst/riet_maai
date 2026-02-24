@@ -12,17 +12,30 @@ const app = express();
 
 // Middleware
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',')
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
     : ['http://localhost:5173'];
 
 const corsOptions = {
     origin: function (origin, callback) {
         // allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) !== -1) {
+
+        const isAllowed = allowedOrigins.some(allowed => {
+            if (allowed.includes('*')) {
+                const regex = new RegExp('^' + allowed.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+                return regex.test(origin);
+            }
+            return allowed === origin;
+        });
+
+        // Also allow Vercel subdomains for the project automatically
+        const isVercelPreview = origin.endsWith('.vercel.app');
+
+        if (isAllowed || isVercelPreview) {
             callback(null, true);
         } else {
-            console.warn(`Blocked by CORS: ${origin}`);
+            console.warn(`CORS BLOCKED for origin: ${origin}`);
+            console.warn(`Allowed origins are: ${allowedOrigins.join(', ')}`);
             callback(new Error('Not allowed by CORS'));
         }
     },
