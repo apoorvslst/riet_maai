@@ -7,7 +7,7 @@ import {
     Stethoscope, Users as UsersIcon, Loader
 } from 'lucide-react';
 
-const BACKEND = 'http://localhost:5000';
+const BACKEND = import.meta.env.VITE_API_URL;
 
 const Dashboard = ({ user, onBack, onEmergencyCall }) => {
     // ─── State ──────────────────────────────────────────────────────────

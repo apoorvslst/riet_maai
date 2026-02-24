@@ -49,7 +49,7 @@ const Auth = ({ onClose, onAuthSuccess }) => {
             // we'll simulate a successful login/signup for the user.
             let userData;
             try {
-                const response = await fetch(`http://localhost:5000${endpoint}`, {
+                const response = await fetch(`${import.meta.env.VITE_API_URL}${endpoint}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
