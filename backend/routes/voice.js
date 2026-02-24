@@ -343,7 +343,7 @@ router.post('/process-ai', async (req, res) => {
                     {
                         inputs: [finalText],
                         target_language_code: bulbulLang,
-                        speaker: 'meera',   // Meera: warm, empathetic Indian female voice
+                        speaker: 'anushka',  // Anushka: warm, empathetic Indian female voice
                         model: 'bulbul:v3'
                     },
                     {
