@@ -480,7 +480,7 @@ const VoiceInterface = ({ user }) => {
 
     try {
       setInteractionMode('PROCESSING');
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/ask`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -652,7 +652,7 @@ const VoiceInterface = ({ user }) => {
       setTranscript(`You: "${userText}"`);
 
       // 2. RAG via Backend
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/ask`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1148,7 +1148,7 @@ const ContactModal = ({ onClose, onProceed, loading, user, selectedLanguage }) =
     setSupportInput('');
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/ask`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
