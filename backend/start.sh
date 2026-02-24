@@ -7,11 +7,10 @@
 echo "📦 Installing Python dependencies..."
 pip install -r requirements.txt 2>/dev/null || echo "⚠️ pip install skipped (may already be installed)"
 
-# Start Python RAG API in the background
+# Start Python RAG API in the background (subshell so main shell stays in /app)
 echo "🚀 Starting Python AI Service on port 8000..."
-cd python && python3 api.py &
+(cd python && python3 api.py) &
 PYTHON_PID=$!
-cd ..
 
 # Wait for Python to be ready
 echo "⏳ Waiting for Python service to start..."
